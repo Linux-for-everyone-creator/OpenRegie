@@ -88,6 +88,8 @@ knopf_text = "#F2F4F8"
 # Farbe, wenn der Joystick-Zeiger über einem Knopf ist.
 knopf_hover = "#4A5568"
 knopf_hover_rahmen = "#FFD23F"
+# Rahmen, wenn ein Knopf mit der Tab-Taste ausgewählt ist.
+knopf_fokus_rahmen = "#5B9BFF"
 knopf_gedrueckt = "#5A6578"
 knopf_aus = "#24282F"
 knopf_aus_text = "#5C6370"
@@ -119,7 +121,7 @@ schrift_klein = 16
 schrift_titel = 30
 schrift_countdown = 96
 knopf_hoehe = 72
-knopf_breite_min = 120
+knopf_breite_min = 110
 knopf_rundung = 12
 rahmen_dick = 4
 abstand = 16
@@ -128,7 +130,10 @@ on_air_breite = 260
 on_air_hoehe = 72
 titelliste_breite = 280
 titelliste_zeilenhoehe = 64
-seitenleiste_breite = 460
+seitenleiste_breite = 520
+# Beim Start das ganze Bild ausfüllen? true = ja, false = nein
+fenster_maximiert = true
+# Fenstergröße, wenn nicht maximiert
 fenster_breite = 1600
 fenster_hoehe = 900
 
