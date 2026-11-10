@@ -35,7 +35,8 @@ class Bereich:
                 f"der Eintrag „{schluessel}“."
             ) from None
         if isinstance(wert, dict):
-            return Bereich(f"{self._name}.{schluessel}", wert)
+            name = f"{self._name}.{schluessel}" if self._name else schluessel
+            return Bereich(name, wert)
         return wert
 
     def als_dict(self) -> dict:

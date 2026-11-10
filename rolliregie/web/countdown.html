@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Rolliregie Countdown</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: transparent; overflow: hidden;
+  }
+  body {
+    display: flex; box-sizing: border-box; padding: {{RAND}};
+    justify-content: {{WAAGRECHT}}; align-items: {{SENKRECHT}};
+  }
+  #anzeige {
+    font-family: "{{SCHRIFTART}}", sans-serif;
+    font-size: {{SCHRIFTGROESSE}};
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: {{TEXTFARBE}};
+    background: {{HINTERGRUND}};
+    padding: 0.15em 0.4em;
+    border-radius: 0.15em;
+    visibility: hidden;
+    white-space: nowrap;
+  }
+  #anzeige.endtext { font-size: {{ENDGROESSE}}; }
+</style>
+</head>
+<body>
+<div id="anzeige">00:00</div>
+<script>
+  const ENDTEXT = {{ENDTEXT_JSON}};
+  const anzeige = document.getElementById("anzeige");
+  let fehlschlaege = 0;
+
+  async function abfragen() {
+    try {
+      const antwort = await fetch("/countdown/zustand", { cache: "no-store" });
+      const stand = await antwort.json();
+      fehlschlaege = 0;
+      const ende = stand.zustand === "abgelaufen" && ENDTEXT !== "";
+      anzeige.textContent = ende ? ENDTEXT : stand.text;
+      anzeige.classList.toggle("endtext", ende);
+      anzeige.style.visibility = "visible";
+    } catch (e) {
+      // Rolliregie ist zu: nach kurzer Zeit ausblenden, damit keine alte Zeit stehen bleibt.
+      fehlschlaege += 1;
+      if (fehlschlaege >= 5) anzeige.style.visibility = "hidden";
+    }
+    setTimeout(abfragen, 200);
+  }
+  abfragen();
+</script>
+</body>
+</html>
