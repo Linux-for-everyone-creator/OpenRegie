@@ -1,0 +1,187 @@
+# =====================================================================
+#  Rolliregie – alle Einstellungen an einer Stelle
+# ---------------------------------------------------------------------
+#  Hier stehen alle Farben, Texte und Größen.
+#  Ändern: Wert rechts vom "=" anpassen, Datei speichern,
+#  Rolliregie neu starten.
+#  Farben sind Hex-Codes, z. B. "#FF0000" = Rot.
+#  Texte immer in "Anführungszeichen".
+# =====================================================================
+
+
+# ---------------------------------------------------------------------
+#  Verbindung zu OBS
+# ---------------------------------------------------------------------
+[obs]
+# Adresse von OBS. "localhost" heißt: OBS läuft auf diesem PC.
+adresse = "localhost"
+# 0 = Port automatisch aus den OBS-Einstellungen lesen.
+port = 0
+# Leer lassen = Passwort automatisch aus den OBS-Einstellungen lesen.
+passwort = ""
+# Wie oft Rolliregie es neu versucht, wenn OBS nicht erreichbar ist (Sekunden).
+neu_verbinden_sekunden = 3
+# Befehl, mit dem der Knopf "OBS starten" OBS öffnet.
+startbefehl = "obs"
+
+
+# ---------------------------------------------------------------------
+#  Live-Vorschau
+# ---------------------------------------------------------------------
+[vorschau]
+# Bilder pro Sekunde. Mehr = flüssiger, aber mehr Rechenlast.
+bilder_pro_sekunde = 10
+# Breite des Vorschaubilds in Pixeln (Höhe passt sich an).
+bildbreite = 960
+# Bildqualität 1 bis 100.
+qualitaet = 75
+
+
+# ---------------------------------------------------------------------
+#  Countdown
+# ---------------------------------------------------------------------
+[countdown]
+# Dauer beim Start von Rolliregie (Sekunden). 300 = 5 Minuten.
+startdauer_sekunden = 300
+# Schritte der Plus/Minus-Knöpfe (Sekunden).
+schritt_gross_sekunden = 60
+schritt_klein_sekunden = 10
+# Längste mögliche Dauer (Sekunden). 5999 = 99:59.
+hoechstdauer_sekunden = 5999
+
+# Name der Browserquelle, die Rolliregie in OBS anlegt.
+obs_quellenname = "Rolliregie Countdown"
+# Port der kleinen Countdown-Seite (nur auf diesem PC erreichbar).
+webseiten_port = 8787
+
+# Aussehen im Stream:
+# Position: "oben links", "oben mitte", "oben rechts",
+#           "mitte links", "mitte", "mitte rechts",
+#           "unten links", "unten mitte", "unten rechts"
+position = "mitte"
+# Abstand zum Bildrand in Pixeln.
+randabstand = 60
+schriftart = "Noto Sans"
+schriftgroesse = 160
+textfarbe = "#FFFFFF"
+hintergrundfarbe = "#000000"
+# Deckkraft des Hintergrunds: 0 = durchsichtig, 1 = voll.
+hintergrund_deckkraft = 0.55
+# Text, wenn der Countdown abgelaufen ist. Leer = "00:00" bleibt stehen.
+endtext = "Gleich geht's los!"
+endtext_schriftgroesse = 110
+
+
+# ---------------------------------------------------------------------
+#  Farben des Regiepults
+# ---------------------------------------------------------------------
+[farben]
+hintergrund = "#15171C"
+flaeche = "#1F232B"
+flaeche_hell = "#2A2F3A"
+rahmen = "#3A4150"
+text = "#F2F4F8"
+text_gedimmt = "#9AA3B2"
+
+knopf = "#323846"
+knopf_text = "#F2F4F8"
+# Farbe, wenn der Joystick-Zeiger über einem Knopf ist.
+knopf_hover = "#4A5568"
+knopf_hover_rahmen = "#FFD23F"
+knopf_gedrueckt = "#5A6578"
+knopf_aus = "#24282F"
+knopf_aus_text = "#5C6370"
+
+start = "#1F8A4C"
+pause = "#C98A12"
+stopp = "#B3261E"
+
+status_verbunden = "#2ECC71"
+status_verbinde = "#F1C40F"
+status_getrennt = "#E74C3C"
+
+on_air_an = "#FF1E1E"
+on_air_an_text = "#FFFFFF"
+on_air_aus = "#3A1414"
+on_air_aus_text = "#7A4A4A"
+on_air_startet = "#C0611B"
+
+auswahl = "#2D6CDF"
+build_text = "#6B7385"
+
+
+# ---------------------------------------------------------------------
+#  Größen im Regiepult (Pixel)
+# ---------------------------------------------------------------------
+[groessen]
+schrift = 20
+schrift_klein = 16
+schrift_titel = 30
+schrift_countdown = 96
+knopf_hoehe = 72
+knopf_breite_min = 120
+knopf_rundung = 12
+rahmen_dick = 4
+abstand = 16
+lampe = 36
+on_air_breite = 260
+on_air_hoehe = 72
+titelliste_breite = 280
+titelliste_zeilenhoehe = 64
+seitenleiste_breite = 460
+fenster_breite = 1600
+fenster_hoehe = 900
+
+
+# ---------------------------------------------------------------------
+#  Texte im Regiepult
+# ---------------------------------------------------------------------
+[texte]
+programmname = "Rolliregie"
+untertitel = "Barrierefrei streamen"
+build_anzeige = "{programmname} Build {build}"
+
+status_verbunden = "OBS verbunden"
+status_verbinde = "Verbinde mit OBS …"
+status_getrennt = "Keine Verbindung zu OBS"
+
+on_air_an = "ON AIR"
+on_air_aus = "NICHT LIVE"
+on_air_startet = "STARTET …"
+on_air_stoppt = "STOPPT …"
+
+knopf_obs_starten = "OBS starten"
+knopf_verbinden = "Neu verbinden"
+
+titelliste_ueberschrift = "Titel"
+vorschau_ueberschrift = "Live-Vorschau"
+vorschau_keine_verbindung = "Keine Vorschau.\nOBS ist nicht verbunden."
+vorschau_wartet = "Vorschau wird geladen …"
+
+countdown_ueberschrift = "Countdown"
+countdown_titelname = "Countdown"
+knopf_start = "Start"
+knopf_weiter = "Weiter"
+knopf_pause = "Pause"
+knopf_stopp = "Stopp"
+knopf_einrichten = "Countdown in OBS einrichten"
+countdown_zustand_bereit = "Bereit"
+countdown_zustand_laeuft = "Läuft"
+countdown_zustand_pausiert = "Pausiert"
+countdown_zustand_abgelaufen = "Abgelaufen"
+plus_minus_beschriftung = "Dauer einstellen"
+
+# Meldungen (verständlich, ohne Fachsprache)
+meldung_obs_nicht_offen = "OBS ist nicht geöffnet. Klicke auf „OBS starten“."
+meldung_websocket_aus = "OBS ist offen, aber die Fernsteuerung ist aus. In OBS: Werkzeuge → WebSocket-Servereinstellungen → „WebSocket-Server aktivieren“ einschalten."
+meldung_passwort_falsch = "OBS hat das Passwort abgelehnt. Bitte in einstellungen.toml bei [obs] das Passwort leer lassen oder das richtige eintragen."
+meldung_obs_zu_alt = "Diese OBS-Version ist zu alt für Rolliregie. Bitte OBS aktualisieren."
+meldung_verbindung_weg = "Die Verbindung zu OBS ist abgebrochen. Rolliregie versucht es gleich wieder."
+meldung_obs_startet = "OBS wird gestartet …"
+meldung_obs_start_fehler = "OBS ließ sich nicht starten."
+meldung_einrichten_ok = "Fertig! Der Countdown ist jetzt in der Szene „{szene}“."
+meldung_einrichten_kein_browser = "In diesem OBS fehlt die Browserquelle. Der Countdown kann so nicht angezeigt werden."
+meldung_einrichten_fehler = "Das Einrichten hat nicht geklappt: {grund}"
+meldung_nicht_verbunden = "Das geht erst, wenn OBS verbunden ist."
+meldung_webseite_port_belegt = "Die Countdown-Seite konnte nicht starten, weil Port {port} schon benutzt wird. Bitte in einstellungen.toml bei [countdown] einen anderen webseiten_port eintragen."
+meldung_schon_offen = "Rolliregie ist schon geöffnet."

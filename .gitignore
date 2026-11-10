@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.venv/
+# Persönliche, lokale Daten (z. B. später Zugangsdaten für Overlays.uno)
+daten/geheim*
