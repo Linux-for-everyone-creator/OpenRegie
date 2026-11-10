@@ -90,6 +90,7 @@ class ObsVerbindung(QObject):
 
         self._socket: QWebSocket | None = None
         self._passwort = ""
+        self._still = False  # läuft gerade ein stiller Neuversuch?
         self._offene_anfragen: dict[str, tuple[Rueckruf | None, QTimer]] = {}
         self._zaehler = itertools.count(1)
         self._aktiv = False  # soll überhaupt verbunden sein?
@@ -160,7 +161,8 @@ class ObsVerbindung(QObject):
         self._alte_verbindung_weg()
         zugang = self._zugang_finden()  # jedes Mal neu lesen: Passwort könnte geändert sein
         self._passwort = zugang.passwort
-        if not (still and self.status is Status.GETRENNT and self.meldung):
+        self._still = still and self.status is Status.GETRENNT and bool(self.meldung)
+        if not self._still:
             self._status_setzen(Status.VERBINDE, self._texte.status_verbinde)
 
         socket = QWebSocket()
@@ -171,7 +173,8 @@ class ObsVerbindung(QObject):
         socket.textMessageReceived.connect(lambda text, s=socket: self._nachricht(s, text))
         self._socket = socket
         adresse = f"ws://{self._obs.adresse}:{zugang.port}"
-        log.info("Verbinde mit %s", adresse)
+        # Stille Neuversuche nur ins ausführliche Protokoll, sonst wird die Datei voll
+        log.log(logging.DEBUG if self._still else logging.INFO, "Verbinde mit %s", adresse)
         self._anmelde_timer.start(ANMELDE_ZEITLIMIT_MS)
         socket.open(QUrl(adresse))
 
@@ -205,10 +208,10 @@ class ObsVerbindung(QObject):
         code = socket.closeCode()
         fehler = socket.error()
         war_verbunden = self.status is Status.VERBUNDEN
-        log.info("Getrennt (Code %s, Fehler %s)", int(code.value if hasattr(code, "value") else code), fehler)
+        code_zahl = int(code.value if hasattr(code, "value") else code)
+        log.log(logging.DEBUG if self._still else logging.INFO, "Getrennt (Code %s, Fehler %s)", code_zahl, fehler)
         self._alte_verbindung_weg()
 
-        code_zahl = int(code.value if hasattr(code, "value") else code)
         if code_zahl == CODE_PASSWORT_FALSCH:
             meldung = self._texte.meldung_passwort_falsch
         elif code_zahl == CODE_VERSION_ZU_ALT:

@@ -8,15 +8,15 @@ keine Tastenkombination als einziger Weg, wenig Tippen, alle Texte auf Deutsch.
 
 ## Version 1
 
-### Build 1.0 – Motortest (intern) · *in Arbeit*
-- [ ] Eigenes Programmfenster im Regiepult-Look
-- [ ] Verbindung zu OBS über WebSocket mit gut sichtbarer Statusanzeige
-- [ ] Live-Vorschau des Sendebilds (Einzelbilder über den WebSocket statt virtueller Kamera)
-- [ ] Rotes „On Air“-Licht, wenn OBS live streamt
-- [ ] Countdown: Dauer mit Plus/Minus, Start, Pause, Stopp – als lokale Seite, die OBS als Browserquelle einbindet
-- [ ] Einfache Liste aller Rolliregie-Titel
-- [ ] Build-Anzeige unten links (liest die Nummer automatisch aus der Datei `VERSION`)
-- [ ] Startmenü-Eintrag
+### Build 1.0 – Motortest (intern) · *fertig (10.11.2026)*
+- [x] Eigenes Programmfenster im Regiepult-Look
+- [x] Verbindung zu OBS über WebSocket mit gut sichtbarer Statusanzeige
+- [x] Live-Vorschau des Sendebilds (Einzelbilder über den WebSocket statt virtueller Kamera)
+- [x] Rotes „On Air“-Licht, wenn OBS live streamt
+- [x] Countdown: Dauer mit Plus/Minus, Start, Pause, Stopp – als lokale Seite, die OBS als Browserquelle einbindet
+- [x] Einfache Liste aller Rolliregie-Titel
+- [x] Build-Anzeige unten links (liest die Nummer automatisch aus der Datei `VERSION`)
+- [x] Startmenü-Eintrag
 
 ### Build 1.1 – erste Version zum Streamen
 - [ ] Overlays.uno-Anbindung (API): Texte ändern, ein- und ausblenden – Aussehen kommt von Uno

@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import os
+import signal
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QLockFile, QStandardPaths
+from PySide6.QtCore import QLockFile, QStandardPaths, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -103,6 +104,14 @@ def main() -> int:
         log.info("Rolliregie beendet")
 
     app.aboutToQuit.connect(aufraeumen)
+
+    # Beim Abmelden/Herunterfahren schickt das System „bitte beenden“ (SIGTERM):
+    # dann sauber schließen. Der kleine Timer gibt Python regelmäßig die Gelegenheit dazu.
+    signal.signal(signal.SIGTERM, lambda *_: app.quit())
+    signal.signal(signal.SIGINT, lambda *_: app.quit())
+    wach = QTimer()
+    wach.start(500)
+    wach.timeout.connect(lambda: None)
 
     if bool(E.groessen.fenster_maximiert):
         fenster.showMaximized()
