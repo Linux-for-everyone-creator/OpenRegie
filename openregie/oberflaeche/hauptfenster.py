@@ -1,15 +1,16 @@
-"""Das Hauptfenster im Regiepult-Look.
+"""Das Hauptfenster – Aussehen nach dem Entwurf „Hauptfenster (Build 1)“.
 
-  ┌──────────────────────────────────────────────────────────────────┐
-  │ OpenRegie              ● OBS verbunden                  [ON AIR] │  Kopfleiste
-  ├──────────────────────────────────────────────────────────────────┤
-  │ (Hinweis, wenn mit OBS etwas nicht stimmt) [OBS starten] [Neu]   │  Meldungsleiste
-  ├─────────────┬─────────────────────────────┬──────────────────────┤
-  │ Overlays    │  Live-Vorschau              │  Bedienfeld des      │
-  │ ● Bauchb [Ein]                            │  gewählten Overlays  │
-  │ ● Ticker [Aus]──────────────────────────  │  (oder Uno-Projekte) │
-  │             │  Twitch-Streamtitel         │                      │
-  └─────────────┴─────────────────────────────┴──────────────────────┘
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ [■] OpenRegie         ( ● OBS verbunden )        ( ● ON AIR ) 18:57:12 │  Kopfleiste
+  ├──────────────────────────────────────────────────────────────────────┤
+  │ (Hinweis, wenn mit OBS etwas nicht stimmt)  [OBS starten] [Neu]       │  Meldungsleiste
+  ├──────────────┬──────────────────────────────┬────────────────────────┤
+  │ Bibliothek ↻+│  Live-Bild (roter Rahmen,    │ AUSGEWÄHLT             │
+  │ ┌────┐┌────┐ │  wenn live)                  │ Countdown | Circles    │
+  │ │Kach││Kach│ │                              │ Countdown / Texte      │
+  │ └────┘└────┘ ├──────────────────────────────┤                        │
+  │ LAMPEN ● ● ● │  Twitch-Streamtitel          │ [▶ Einblenden][■ Aus…] │
+  └──────────────┴──────────────────────────────┴────────────────────────┘
    OpenRegie · Vorabversion · Build 1.1   ← Wasserzeichen unten links
 """
 
@@ -17,7 +18,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QTime, Qt, QTimer
 from PySide6.QtWidgets import (QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
                                QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
@@ -27,8 +28,8 @@ from ..obs.verbindung import ObsVerbindung, Sendung, Status
 from ..obs.vorschau import Vorschau
 from ..twitch.konto import TwitchKonto
 from ..uno.verwaltung import UnoVerwaltung
-from .bausteine import OnAirLicht, VerbindungsAnzeige, VorschauBild, beschriftung, flaeche, knopf
-from .overlay_bereich import OverlayBedienfeld, OverlayListe, UnoEinrichtung, meldung
+from .bausteine import Logo, OnAirLicht, VerbindungsAnzeige, VorschauBild, beschriftung, flaeche, knopf
+from .overlay_bereich import Bibliothek, OverlayBedienfeld, UnoEinrichtung
 from .stil import stylesheet
 from .twitch_bereich import TwitchBereich
 
@@ -48,6 +49,7 @@ class Hauptfenster(QMainWindow):
         self.uno = uno
         self.twitch = twitch
         self._sammlung_text = ""
+        self._einrichtung_vom_nutzer = False
         self._schliessen_erlaubt = False
         self._stoppt_fuer_ende = False
         t, g = E.texte, E.groessen
@@ -69,6 +71,8 @@ class Hauptfenster(QMainWindow):
         kopf = flaeche("kopfleiste")
         kl = QHBoxLayout(kopf)
         kl.setContentsMargins(g.abstand * 2, g.abstand, g.abstand * 2, g.abstand)
+        kl.setSpacing(g.abstand)
+        kl.addWidget(Logo(E))
         name = QVBoxLayout()
         name.setSpacing(0)
         name.addWidget(beschriftung(t.programmname, "programmname"))
@@ -80,6 +84,9 @@ class Hauptfenster(QMainWindow):
         kl.addStretch(1)
         self.on_air = OnAirLicht(E)
         kl.addWidget(self.on_air)
+        kl.addSpacing(g.abstand)
+        self.uhr = beschriftung("", "uhr")
+        kl.addWidget(self.uhr)
         haupt.addWidget(kopf)
 
         inhalt = QVBoxLayout()
@@ -106,39 +113,34 @@ class Hauptfenster(QMainWindow):
         ml.addWidget(self.knopf_neu)
         inhalt.addWidget(self.meldungsleiste)
 
-        # --- Mitte: Overlays | Vorschau + Twitch | Bedienfeld ---------------
+        # --- Mitte: Bibliothek | Live-Bild + Twitch | Ausgewählt -------------
         reihe = QHBoxLayout()
         reihe.setSpacing(g.abstand)
         inhalt.addLayout(reihe, 1)
+        rand = g.abstand + 8
 
         links = flaeche()
-        links.setFixedWidth(int(g.overlayliste_breite))
+        links.setFixedWidth(int(g.bibliothek_breite))
         ll = QVBoxLayout(links)
-        ll.setContentsMargins(g.abstand, g.abstand, g.abstand, g.abstand)
-        self.overlayliste = OverlayListe(E, uno)
-        ll.addWidget(self.overlayliste, 1)
-        self.uno_meldung = meldung()
-        ll.addWidget(self.uno_meldung)
+        ll.setContentsMargins(rand, rand, rand, rand)
+        self.bibliothek = Bibliothek(E, uno)
+        ll.addWidget(self.bibliothek, 1)
         reihe.addWidget(links)
 
         spalte = QVBoxLayout()
         spalte.setSpacing(g.abstand)
-        vorschau_flaeche = flaeche()
-        vl = QVBoxLayout(vorschau_flaeche)
-        vl.setContentsMargins(g.abstand, g.abstand, g.abstand, g.abstand)
         szenenzeile = QHBoxLayout()
         szenenzeile.addWidget(beschriftung(t.vorschau_ueberschrift, "ueberschrift"))
         szenenzeile.addStretch(1)
         self.szenenname = beschriftung("", "gedimmt")
         szenenzeile.addWidget(self.szenenname)
-        vl.addLayout(szenenzeile)
+        spalte.addLayout(szenenzeile)
         self.vorschaubild = VorschauBild(E)
-        vl.addWidget(self.vorschaubild, 1)
-        spalte.addWidget(vorschau_flaeche, 1)
+        spalte.addWidget(self.vorschaubild, 1)
 
         twitch_flaeche = flaeche()
         tl = QVBoxLayout(twitch_flaeche)
-        tl.setContentsMargins(g.abstand, g.abstand, g.abstand, g.abstand)
+        tl.setContentsMargins(rand, rand, rand, rand)
         self.twitch_bereich = TwitchBereich(E, twitch)
         tl.addWidget(self.twitch_bereich)
         spalte.addWidget(twitch_flaeche)
@@ -147,7 +149,7 @@ class Hauptfenster(QMainWindow):
         rechts = flaeche()
         rechts.setFixedWidth(int(g.seitenleiste_breite))
         rl = QVBoxLayout(rechts)
-        rl.setContentsMargins(g.abstand, g.abstand, g.abstand, g.abstand)
+        rl.setContentsMargins(rand, rand, rand, rand)
         self.bedienfelder = QStackedWidget()
         self.uno_einrichtung = UnoEinrichtung(E, uno)
         self.overlay_bedienfeld = OverlayBedienfeld(E, uno)
@@ -166,11 +168,13 @@ class Hauptfenster(QMainWindow):
         self.build.adjustSize()
 
         # --- Bedienung ------------------------------------------------------
-        self.overlayliste.gewaehlt.connect(self._overlay_zeigen)
-        self.overlayliste.einrichten_geklickt.connect(self._einrichtung_zeigen)
+        self.bibliothek.gewaehlt.connect(self._overlay_zeigen)
+        self.bibliothek.einrichten_geklickt.connect(lambda: self._einrichtung_zeigen(vom_nutzer=True))
         self.uno_einrichtung.zurueck_geklickt.connect(self._zurueck_zur_auswahl)
+        # Wer selbst einfügt oder entfernt, bleibt auf der Seite und sieht die Meldung
+        self.uno_einrichtung.einfuegen.clicked.connect(lambda: setattr(self, "_einrichtung_vom_nutzer", True))
         uno.liste_geaendert.connect(self._liste_geaendert)
-        uno.meldung.connect(lambda text, fehler: self.uno_meldung.zeigen(text, False if fehler else None))
+        uno.meldung.connect(lambda text, fehler: self.bibliothek.meldung.zeigen(text, False if fehler else None))
 
         verbindung.status_geaendert.connect(self._status)
         verbindung.sendung_geaendert.connect(self._sendung)
@@ -183,12 +187,21 @@ class Hauptfenster(QMainWindow):
         self._stopp_uhr.setSingleShot(True)
         self._stopp_uhr.timeout.connect(self._endgueltig_schliessen)
 
+        self._uhr_takt = QTimer(self)
+        self._uhr_takt.setInterval(500)
+        self._uhr_takt.timeout.connect(self._uhr_stellen)
+        self._uhr_takt.start()
+        self._uhr_stellen()
+
         self._status(verbindung.status, verbindung.meldung)
-        self.on_air.zeigen(verbindung.sendung)
+        self._sendung(verbindung.sendung)
         self._liste_geaendert()
         mitte.setFocus()
 
     # ------------------------------------------------------------------
+    def _uhr_stellen(self) -> None:
+        self.uhr.setText(QTime.currentTime().toString("HH:mm:ss"))
+
     def resizeEvent(self, e):
         super().resizeEvent(e)
         g = self.E.groessen
@@ -206,27 +219,29 @@ class Hauptfenster(QMainWindow):
         self.overlay_bedienfeld.zeigen(overlay)
         self.bedienfelder.setCurrentWidget(self.overlay_bedienfeld)
 
-    def _einrichtung_zeigen(self) -> None:
-        self.overlayliste.auswahl_aufheben()
+    def _einrichtung_zeigen(self, vom_nutzer: bool = True) -> None:
+        self._einrichtung_vom_nutzer = vom_nutzer
+        self.bibliothek.auswahl_aufheben()
         self.uno_einrichtung.projekte_zeigen()
         self.bedienfelder.setCurrentWidget(self.uno_einrichtung)
 
     def _zurueck_zur_auswahl(self) -> None:
         if self.uno.overlays:
-            self.overlayliste.waehlen(next(iter(self.uno.overlays)))
+            self._einrichtung_vom_nutzer = False
+            self.bibliothek.waehlen(next(iter(self.uno.overlays)))
         else:
-            self._einrichtung_zeigen()
+            self._einrichtung_zeigen(vom_nutzer=False)
 
     def _liste_geaendert(self) -> None:
         """Ohne Uno-Projekt: gleich die Einrichtung zeigen. Sonst das erste Overlay wählen."""
-        if self.bedienfelder.currentWidget() is self.uno_einrichtung and self.uno.projekte:
-            return  # gerade beim Einrichten – dort bleiben
-        if self.overlayliste.gewaehlter is None:
+        if self.bedienfelder.currentWidget() is self.uno_einrichtung and self._einrichtung_vom_nutzer:
+            return  # Kevin ist gerade beim Einrichten – dort bleiben
+        if self.bibliothek.gewaehlter is None:
             self._zurueck_zur_auswahl()
 
     # --- OBS ----------------------------------------------------------------
     def _status(self, status: Status, _meldung: str) -> None:
-        self.verbindungsanzeige.zeigen(status)
+        self.verbindungsanzeige.zeigen_status(status)
         if status is not Status.VERBUNDEN:
             self.vorschaubild.text_setzen(self.E.texte.vorschau_keine_verbindung)
         elif not self.vorschaubild.hat_bild():
@@ -255,7 +270,8 @@ class Hauptfenster(QMainWindow):
         self.knopf_neu.setVisible(neu_knopf)
 
     def _sendung(self, sendung: Sendung) -> None:
-        self.on_air.zeigen(sendung)
+        self.on_air.zeigen_sendung(sendung)
+        self.vorschaubild.live_setzen(sendung is Sendung.AN)
         if self._stoppt_fuer_ende and sendung is Sendung.AUS:
             self._endgueltig_schliessen()
 

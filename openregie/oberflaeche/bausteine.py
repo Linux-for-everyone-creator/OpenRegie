@@ -1,9 +1,9 @@
-"""Wiederverwendbare Bausteine: großer Knopf, Statuslampe, On-Air-Licht, Vorschaubild."""
+"""Wiederverwendbare Bausteine: großer Knopf, Lampe, Logo, Pillen (OBS-Status, ON AIR), Vorschaubild."""
 
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QWidget
 
 from ..obs.verbindung import Sendung, Status
@@ -36,86 +36,123 @@ def beschriftung(text: str, name: str = "") -> QLabel:
 
 
 class Lampe(QWidget):
-    """Runde Lampe in einer Farbe (für den Verbindungsstatus)."""
+    """Runder Punkt in einer Farbe (Statuslampe)."""
 
-    def __init__(self, groesse: int, farbe: str, parent=None):
+    def __init__(self, groesse: int, farbe: str, parent=None, glanz: bool = False):
         super().__init__(parent)
         self.setFixedSize(groesse, groesse)
         self._farbe = QColor(farbe)
+        self._glanz = glanz
 
     def farbe_setzen(self, farbe: str) -> None:
         self._farbe = QColor(farbe)
         self.update()
 
+    def farbe(self) -> str:
+        return self._farbe.name().upper()
+
     def paintEvent(self, _e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(QColor(0, 0, 0, 120))
-        p.setBrush(self._farbe)
-        p.drawEllipse(QRectF(2, 2, self.width() - 4, self.height() - 4))
-        # kleiner Glanzpunkt
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(255, 255, 255, 70))
-        d = self.width() / 3
-        p.drawEllipse(QRectF(self.width() * 0.22, self.height() * 0.18, d, d * 0.8))
+        p.setBrush(self._farbe)
+        p.drawEllipse(QRectF(1, 1, self.width() - 2, self.height() - 2))
+        if self._glanz:
+            p.setBrush(QColor(255, 255, 255, 70))
+            d = self.width() / 3
+            p.drawEllipse(QRectF(self.width() * 0.22, self.height() * 0.18, d, d * 0.8))
 
 
-class VerbindungsAnzeige(QWidget):
-    """Lampe + Text, z. B. grün „OBS verbunden“."""
+class Logo(QWidget):
+    """Gelbes Quadrat mit einem kleinen Bildschirm-Symbol (wie im Entwurf)."""
+
+    def __init__(self, E, parent=None):
+        super().__init__(parent)
+        g = int(E.groessen.logo)
+        self.setFixedSize(g, g)
+        self._grund = QColor(E.farben.logo)
+        self._symbol = QColor(E.farben.logo_symbol)
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w = self.width()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(self._grund)
+        p.drawRoundedRect(QRectF(0, 0, w, w), w * 0.22, w * 0.22)
+        stift = QPen(self._symbol, max(2.0, w * 0.06))
+        stift.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(stift)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(QRectF(w * 0.26, w * 0.32, w * 0.48, w * 0.36), w * 0.06, w * 0.06)
+        p.drawLine(int(w * 0.36), int(w * 0.45), int(w * 0.64), int(w * 0.45))
+        p.drawLine(int(w * 0.36), int(w * 0.56), int(w * 0.54), int(w * 0.56))
+
+
+class Pille(QFrame):
+    """Abgerundetes Schild mit Punkt und Text (OBS-Status, ON AIR)."""
 
     def __init__(self, E, parent=None):
         super().__init__(parent)
         from PySide6.QtWidgets import QHBoxLayout
 
         self._E = E
-        self.lampe = Lampe(E.groessen.lampe, E.farben.status_getrennt)
-        self.text = QLabel(E.texte.status_getrennt)
-        self.text.setStyleSheet(f"font-size: {E.groessen.schrift_titel - 4}px; font-weight: 700;")
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setContentsMargins(22, 10, 26, 10)
         lay.setSpacing(12)
-        lay.addWidget(self.lampe)
+        self.punkt = Lampe(16, E.farben.status_getrennt)
+        lay.addWidget(self.punkt)
+        self.text = QLabel("")
         lay.addWidget(self.text)
-        self.zeigen(Status.GETRENNT)
 
-    def zeigen(self, status: Status) -> None:
-        f, t = self._E.farben, self._E.texte
+    def zeigen(self, text: str, punkt: str, hintergrund: str, rahmen: str, schrift: str, groesse: int,
+               fett: int = 600, abstand: int = 0) -> None:
+        g = self._E.groessen
+        self.text.setText(text)
+        self.setAccessibleName(text)
+        self.punkt.farbe_setzen(punkt)
+        self.setStyleSheet(
+            f"Pille {{ background-color: {hintergrund}; border: 2px solid {rahmen};"
+            f" border-radius: {g.on_air_hoehe // 2}px; }}"
+            f"QLabel {{ color: {schrift}; font-size: {groesse}px; font-weight: {fett};"
+            f" letter-spacing: {abstand}px; background: transparent; }}")
+
+
+class VerbindungsAnzeige(Pille):
+    """Pille mit Punkt + Text, z. B. grün „OBS verbunden“."""
+
+    def __init__(self, E, parent=None):
+        super().__init__(E, parent)
+        self.zeigen_status(Status.GETRENNT)
+
+    def zeigen_status(self, status: Status) -> None:
+        f, t, g = self._E.farben, self._E.texte, self._E.groessen
         farbe, text = {
             Status.VERBUNDEN: (f.status_verbunden, t.status_verbunden),
             Status.VERBINDE: (f.status_verbinde, t.status_verbinde),
             Status.GETRENNT: (f.status_getrennt, t.status_getrennt),
         }[status]
-        self.lampe.farbe_setzen(farbe)
-        self.text.setText(text)
-        self.setAccessibleName(text)
+        self.zeigen(text, farbe, f.flaeche, f.rahmen, f.text, g.schrift)
 
 
-class OnAirLicht(QLabel):
-    """Das rote „ON AIR“-Schild."""
+class OnAirLicht(Pille):
+    """Das rote „● ON AIR“-Schild."""
 
     def __init__(self, E, parent=None):
-        super().__init__(parent)
-        self._E = E
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setFixedSize(E.groessen.on_air_breite, E.groessen.on_air_hoehe)
-        self.zeigen(Sendung.AUS)
+        super().__init__(E, parent)
+        self.setFixedHeight(E.groessen.on_air_hoehe)
+        self.setMinimumWidth(E.groessen.on_air_breite)
+        self.zeigen_sendung(Sendung.AUS)
 
-    def zeigen(self, sendung: Sendung) -> None:
+    def zeigen_sendung(self, sendung: Sendung) -> None:
         f, t, g = self._E.farben, self._E.texte, self._E.groessen
-        hinter, vorder, text, leuchten = {
-            Sendung.AN: (f.on_air_an, f.on_air_an_text, t.on_air_an, True),
-            Sendung.STARTET: (f.on_air_startet, f.on_air_an_text, t.on_air_startet, False),
-            Sendung.STOPPT: (f.on_air_startet, f.on_air_an_text, t.on_air_stoppt, False),
-            Sendung.AUS: (f.on_air_aus, f.on_air_aus_text, t.on_air_aus, False),
+        hinter, vorder, text = {
+            Sendung.AN: (f.on_air_an, f.on_air_an_text, t.on_air_an),
+            Sendung.STARTET: (f.on_air_startet, f.on_air_an_text, t.on_air_startet),
+            Sendung.STOPPT: (f.on_air_startet, f.on_air_an_text, t.on_air_stoppt),
+            Sendung.AUS: (f.on_air_aus, f.on_air_aus_text, t.on_air_aus),
         }[sendung]
-        rahmen = f.on_air_an_text if leuchten else hinter
-        self.setText(text)
-        self.setAccessibleName(text)
-        self.setStyleSheet(
-            f"background-color: {hinter}; color: {vorder}; border: 3px solid {rahmen};"
-            f"border-radius: {g.knopf_rundung}px; font-size: {g.schrift_titel}px; font-weight: 900;"
-            "letter-spacing: 3px;"
-        )
+        self.zeigen(text, vorder, hinter, hinter, vorder, g.schrift_titel - 4, fett=900, abstand=3)
         self.sendung = sendung
 
 
@@ -154,18 +191,34 @@ class VorschauBild(QWidget):
             h = b / verhaeltnis
         return QRectF((self.width() - b) / 2, (self.height() - h) / 2, b, h)
 
+    def live_setzen(self, live: bool) -> None:
+        """Roter Rahmen um das Bild, solange gesendet wird (wie im Entwurf)."""
+        self.live = live
+        self.update()
+
     def paintEvent(self, _e):
+        f, g = self._E.farben, self._E.groessen
         p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        r = self._rahmen()
-        p.fillRect(r, QColor("#000000"))
+        dick = 4
+        r = self._rahmen().adjusted(dick, dick, -dick, -dick)
+        rund = float(g.karten_rundung)
+        weg = QPainterPath()
+        weg.addRoundedRect(r, rund, rund)
+        p.fillPath(weg, QColor(f.flaeche_hell))
         if self._bild is not None:
+            p.save()
+            p.setClipPath(weg)
             p.drawPixmap(r, self._bild, QRectF(self._bild.rect()))
+            p.restore()
         else:
-            p.setPen(QColor(self._E.farben.text_gedimmt))
+            p.setPen(QColor(f.text_gedimmt))
             schrift = QFont(self.font())
-            schrift.setPixelSize(self._E.groessen.schrift)
+            schrift.setPixelSize(g.schrift)
             p.setFont(schrift)
             p.drawText(r, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self._text)
-        p.setPen(QColor(self._E.farben.rahmen))
-        p.drawRect(r.adjusted(0, 0, -1, -1))
+        live = getattr(self, "live", False)
+        p.setPen(QPen(QColor(f.on_air_an if live else f.rahmen), dick if live else 2))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(r, rund, rund)

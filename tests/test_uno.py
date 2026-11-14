@@ -9,8 +9,8 @@ from openregie.uno.verwaltung import (KEIN_INTERNET, NICHT_GEFUNDEN, SONSTIGER_F
                                       UnoVerwaltung, felder_lesen, fehlerart, ist_textfeld, overlays_lesen,
                                       sichtbarkeit_lesen, token_aus_text)
 
-from .falsches_internet import (EINZEL_ADRESSE_TEXT, EINZEL_TOKEN, UNO_ADRESSE_TEXT, UNO_TOKEN,
-                                FalschesInternet)
+from .falsches_internet import (CONTENT, EINZEL_ADRESSE_TEXT, EINZEL_TOKEN, HAUPT, MESSAGE, UNO_ADRESSE_TEXT,
+                                UNO_TOKEN, FalschesInternet)
 from .hilfen import app, internet_einstellungen, warte, warte_bis
 
 
@@ -55,9 +55,10 @@ class AntwortenLesenTest(unittest.TestCase):
 
     def test_felder(self):
         inhalt = {"Name": "Kevin", "Farbe": "#FF0000", "Logo": "https://x/y.png", "An": True, "Zahl": 5, "Leer": ""}
-        self.assertEqual(felder_lesen(inhalt), [("Name", "Kevin"), ("Leer", "")])
-        self.assertEqual(felder_lesen({"content": {"A": "b"}}), [("A", "b")])
-        self.assertEqual(felder_lesen([{"fieldId": "A", "value": "b"}, {"id": "C", "value": 3}]), [("A", "b")])
+        paare = lambda felder: [(f.kennung, f.wert) for f in felder]
+        self.assertEqual(paare(felder_lesen(inhalt)), [("Name", "Kevin"), ("Leer", "")])
+        self.assertEqual(paare(felder_lesen({"content": {"A": "b"}})), [("A", "b")])
+        self.assertEqual(paare(felder_lesen([{"fieldId": "A", "value": "b"}, {"id": "C", "value": 3}])), [("A", "b")])
         self.assertFalse(ist_textfeld("#abc"))
         self.assertTrue(ist_textfeld("#1 im Stream"))
 
@@ -191,12 +192,12 @@ class VerwaltungTest(unittest.TestCase):
         fertig = []
         self.uno.felder_laden(o, lambda ok, f: fertig.append(ok))
         self.assertTrue(warte_bis(lambda: fertig, 3000))
-        self.assertEqual(o.felder, [("Name", "Kevin"), ("Titel", "Live aus dem Studio")])
+        self.assertEqual([(f.kennung, f.wert) for f in o.felder], [("Name", "Kevin"), ("Titel", "Live aus dem Studio")])
         fertig.clear()
-        self.uno.feld_setzen(o, "Titel", "Neuer Text äöü", lambda ok, f: fertig.append(ok))
+        self.uno.feld_setzen(o, o.felder[1], "Neuer Text äöü", lambda ok, f: fertig.append(ok))
         self.assertTrue(warte_bis(lambda: fertig, 3000))
         self.assertEqual(self.netz.inhalte["ov-1"]["Titel"], "Neuer Text äöü")
-        self.assertEqual(dict(o.felder)["Titel"], "Neuer Text äöü")
+        self.assertEqual(o.felder[1].wert, "Neuer Text äöü")
 
     def test_uno_fehler_und_kein_internet(self):
         self.hinzufuegen()
@@ -231,73 +232,126 @@ class VerwaltungTest(unittest.TestCase):
         # Abfrage jede Sekunde, aber höchstens eine gleichzeitig: deutlich weniger als 3
         self.assertLessEqual(self.netz.anzahl("GetOverlays") - vorher, 3)
 
-    # --- Einzel-Unos (kennen kein GetOverlays) --------------------------------
+    # --- Einzel-Unos (kennen kein GetOverlays, Steuerung über Singular) -------
+    def einzel(self):
+        return self.uno.overlays[f"{EINZEL_TOKEN}/"]
+
+    def api_befehle_einzel(self):
+        return [d for d in self.netz.einzel_befehle if "command" in d]
+
     def test_einzel_uno_hinzufuegen(self):
         """Der Fehler aus Build 1.1: Einzel-Uno galt als „Adresse unbekannt“."""
+        self.netz.einzel.vorschau_adresse = "//image.example/vorschau.jpg"  # so liefert es das echte Uno
         self.uno.laden()
         ok, meldung = self.hinzufuegen(EINZEL_ADRESSE_TEXT)
         self.assertTrue(ok, meldung)
         self.assertEqual(meldung, self.E.texte.meldung_uno_einzel_ok)
-        self.assertNotEqual(meldung, self.E.texte.meldung_uno_adresse_unbekannt)
         self.assertEqual(len(self.uno.overlays), 1)
-        o = next(iter(self.uno.overlays.values()))
-        self.assertEqual(o.kennung, "")
-        self.assertEqual(o.name, "Uno-Overlay 1")
-        self.assertIsNone(o.sichtbar)  # Uno sagt beim Einzel-Uno nichts über den Zustand
+        o = self.einzel()
+        self.assertEqual(o.name, "Countdown | Circles")  # echter Name von Uno
+        self.assertEqual(o.vorschaubild, "https://image.example/vorschau.jpg")
+        self.assertFalse(o.sichtbar)
+        self.assertTrue(o.hat_countdown)
+        self.assertEqual(o.dauer, 300)
+        self.assertEqual([(f.kennung, f.wert) for f in o.felder], [("Message", "COUNTDOWN END MESSAGE")])
         gespeichert = json.loads(self.speicher.daten["uno"])
-        self.assertEqual(gespeichert, [{"name": "Uno-Overlay 1", "token": EINZEL_TOKEN, "einzeln": True}])
+        self.assertEqual(gespeichert, [{"name": "Countdown | Circles", "token": EINZEL_TOKEN, "einzeln": True}])
         self.assertFalse([m for m in self.meldungen if m[1]])  # keine rote Meldung
 
-    def test_einzel_uno_ein_und_ausblenden_ohne_id(self):
+    def test_einzel_uno_komplett_ein_und_aus(self):
+        """Wie mit dem echten Uno herausgefunden: Haupt+Content+Countdown auf In und Active an."""
         self.hinzufuegen(EINZEL_ADRESSE_TEXT)
-        o = next(iter(self.uno.overlays.values()))
+        o = self.einzel()
         self.uno.umschalten(o)
         self.assertTrue(warte_bis(lambda: o.sichtbar is True, 3000))
-        self.assertTrue(self.netz.einzel["visible"])
+        self.assertTrue(self.netz.einzel.komplett_sichtbar(), self.netz.einzel.zustand)
+        self.assertEqual(self.netz.einzel.zustand[MESSAGE], "Out1")  # Endtext-Teil bleibt aus
         self.uno.umschalten(o)
         self.assertTrue(warte_bis(lambda: o.sichtbar is False, 3000))
-        self.assertFalse(self.netz.einzel["visible"])
-        for befehl in self.netz.einzel_befehle:
-            if befehl["command"] != "GetOverlays":
-                self.assertNotIn("id", befehl)
+        self.assertTrue(self.netz.einzel.ganz_aus(), self.netz.einzel.zustand)
+        # kein „ShowOverlay“ über …/api – das zeigt beim echten Einzel-Uno nichts an
+        self.assertEqual([d["command"] for d in self.api_befehle_einzel()], ["GetOverlays"])
 
     def test_einzel_uno_texte(self):
         self.hinzufuegen(EINZEL_ADRESSE_TEXT)
-        o = next(iter(self.uno.overlays.values()))
+        o = self.einzel()
         fertig = []
-        self.uno.felder_laden(o, lambda ok, f: fertig.append(ok))
-        self.assertTrue(warte_bis(lambda: fertig, 3000))
-        self.assertEqual(o.felder, [("Titel", "Gleich geht's los")])
-        fertig.clear()
-        self.uno.feld_setzen(o, "Titel", "Gleich!", lambda ok, f: fertig.append(ok))
+        self.uno.feld_setzen(o, o.felder[0], "Gleich geht's los!", lambda ok, f: fertig.append(ok))
         self.assertTrue(warte_bis(lambda: fertig == [True], 3000))
-        self.assertEqual(self.netz.einzel["inhalt"]["Titel"], "Gleich!")
-        self.assertNotIn("id", self.netz.einzel_befehle[-1])
+        self.assertEqual(self.netz.einzel.werte[CONTENT]["Message"], "Gleich geht's los!")
+        self.assertEqual(o.felder[0].wert, "Gleich geht's los!")
 
-    def test_einzel_uno_wird_nicht_dauernd_abgefragt(self):
-        self.speicher.json_schreiben("uno", [{"name": "Uno-Overlay 1", "token": EINZEL_TOKEN, "einzeln": True}])
+    def test_einzel_uno_countdown(self):
+        e = self.netz.einzel
+        e.jetzt = 1_000_000
+        self.hinzufuegen(EINZEL_ADRESSE_TEXT)
+        o = self.einzel()
+
+        def schritt(befehl):
+            fertig = []
+            self.uno.timer_befehl(o, befehl, lambda ok, f: fertig.append(ok))
+            self.assertTrue(warte_bis(lambda: fertig, 3000))
+            self.assertEqual(fertig, [True])
+
+        self.assertEqual(o.restzeit_ms(e.jetzt), 300_000)
+        schritt("play")
+        self.assertTrue(o.timer["isRunning"])
+        e.jetzt += 5_000
+        self.assertEqual(o.restzeit_ms(e.jetzt), 295_000)  # läuft, auch ohne neue Abfrage
+        schritt("pause")
+        self.assertFalse(o.timer["isRunning"])
+        self.assertEqual(o.restzeit_ms(e.jetzt + 60_000), 295_000)  # pausiert: bleibt stehen
+        schritt("reset")
+        self.assertEqual(o.restzeit_ms(e.jetzt), 300_000)
+        fertig = []
+        self.uno.dauer_setzen(o, 600, lambda ok, f: fertig.append(ok))
+        self.assertEqual(o.dauer, 600)  # sofort angezeigt
+        self.assertTrue(warte_bis(lambda: fertig == [True], 3000))
+        self.assertEqual(e.werte[CONTENT]["BeginTime"], 600)
+        self.uno.dauer_setzen(o, -50)
+        self.assertTrue(warte_bis(lambda: e.werte[CONTENT]["BeginTime"] == 0, 3000))  # nie unter 0
+
+    def test_einzel_uno_nur_control_abfragen(self):
+        self.speicher.json_schreiben("uno", [{"name": "Countdown | Circles", "token": EINZEL_TOKEN, "einzeln": True}])
         self.uno.laden()
-        self.assertEqual(len(self.uno.overlays), 1)
-        warte(2500)  # Abfrage läuft jede Sekunde
-        self.assertEqual(self.netz.einzel_befehle, [])  # kein sinnloses GetOverlays (schont das Uno-Limit)
+        self.assertTrue(warte_bis(lambda: self.einzel().bauplan is not None, 3000))
+        self.netz.einzel.zustand[HAUPT] = "In"  # jemand blendet in Uno selbst ein
+        self.assertTrue(warte_bis(lambda: self.einzel().sichtbar is True, 3000))  # Tally folgt
+        self.assertEqual(self.api_befehle_einzel(), [])  # kein sinnloses GetOverlays
 
     def test_altes_gespeichertes_einzel_uno_wird_erkannt(self):
         # gespeichert mit Build 1.1, noch ohne „einzeln“
         self.speicher.json_schreiben("uno", [{"name": "Uno-Projekt 1", "token": EINZEL_TOKEN}])
         self.uno.laden()
-        self.assertTrue(warte_bis(lambda: len(self.uno.overlays) == 1, 3000))
-        self.assertTrue(json.loads(self.speicher.daten["uno"])[0]["einzeln"])
+        self.assertTrue(warte_bis(lambda: f"{EINZEL_TOKEN}/" in self.uno.overlays
+                                  and self.einzel().bauplan is not None, 3000))
+        self.assertEqual(len(self.uno.overlays), 1)
+        gespeichert = json.loads(self.speicher.daten["uno"])[0]
+        self.assertTrue(gespeichert["einzeln"])
+        self.assertEqual(gespeichert["name"], "Countdown | Circles")
         self.assertFalse([m for m in self.meldungen if m[1]])
-        anzahl = len(self.netz.einzel_befehle)
-        warte(2500)
-        self.assertEqual(len(self.netz.einzel_befehle), anzahl)  # danach keine Abfrage mehr
+
+    def test_einzel_uno_ohne_internet_beim_start(self):
+        self.speicher.json_schreiben("uno", [{"name": "Countdown | Circles", "token": EINZEL_TOKEN, "einzeln": True}])
+        self.netz.aus = True
+        self.uno.laden()
+        o = self.einzel()  # steht trotzdem in der Liste
+        self.assertEqual(o.name, "Countdown | Circles")
+        ergebnis = []
+        self.uno.umschalten(o, lambda ok, f: ergebnis.append((ok, f)))
+        self.assertTrue(warte_bis(lambda: ergebnis, 3000))
+        self.assertEqual(ergebnis[0], (False, self.E.texte.meldung_uno_kein_internet))
+        self.assertTrue(warte_bis(lambda: self.meldungen, 3000))
+        self.netz.aus = False
+        self.assertTrue(warte_bis(lambda: self.einzel().bauplan is not None, 4000))  # nächste Abfrage holt es
+        self.assertTrue(warte_bis(lambda: ("", False) in self.meldungen, 3000))  # Meldung verschwindet
 
     def test_beide_arten_zusammen(self):
         self.uno.laden()
         self.assertTrue(self.hinzufuegen()[0])
         self.assertTrue(self.hinzufuegen(EINZEL_ADRESSE_TEXT)[0])
         self.assertEqual([o.name for o in self.uno.overlays.values()],
-                         ["Bauchbinde", "News-Ticker", "Countdown", "Uno-Overlay 2"])
+                         ["Bauchbinde", "News-Ticker", "Countdown", "Countdown | Circles"])
         self.uno.auffrischen()
         warte(500)
         self.assertEqual(len(self.uno.overlays), 4)

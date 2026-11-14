@@ -15,7 +15,10 @@ from openregie.oberflaeche.hauptfenster import Hauptfenster
 from openregie.twitch.konto import Anmeldung, TwitchKonto
 from openregie.uno.verwaltung import UnoVerwaltung
 
-from .falsches_internet import EINZEL_ADRESSE_TEXT, UNO_ADRESSE_TEXT, UNO_TOKEN, FalschesInternet
+from openregie.oberflaeche.overlay_bereich import AUS, BEREIT, LIVE
+
+from .falsches_internet import (CONTENT, EINZEL_ADRESSE_TEXT, EINZEL_TOKEN, UNO_ADRESSE_TEXT, UNO_TOKEN,
+                                FalschesInternet)
 from .falsches_obs import FalschesObs
 from .hilfen import app, internet_einstellungen, obs_einstellungen, warte, warte_bis, zugang
 
@@ -52,7 +55,7 @@ class Grundlage(unittest.TestCase):
         self.uno.laden()
         self.twitch.laden()
         if self.mit_uno:
-            self.assertTrue(warte_bis(lambda: len(self.f.overlayliste.zeilen) == 3, 3000))
+            self.assertTrue(warte_bis(lambda: len(self.f.bibliothek.kacheln) == 3, 3000))
 
     def tearDown(self):
         self.vs.anhalten()
@@ -66,93 +69,93 @@ class Grundlage(unittest.TestCase):
         self.f.deleteLater()
         warte(20)
 
-    def zeile(self, name):
-        return next(z for z in self.f.overlayliste.zeilen.values() if z.overlay.name == name)
+    def kachel(self, name):
+        return next(k for k in self.f.bibliothek.kacheln.values() if k.overlay.name == name)
 
 
 class FensterTest(Grundlage):
-    def test_name_und_build_wasserzeichen(self):
+    def test_name_uhr_und_build_wasserzeichen(self):
         self.assertIn("OpenRegie", self.f.windowTitle())
         self.assertIn("Profi-Regie für alle. Einfach live.", self.f.windowTitle())
         self.assertEqual(self.f.build.text(), "OpenRegie · Vorabversion · Build " + einstellungen.build_nummer())
         self.assertTrue(self.f.build.isVisible())
-        # unten links
         mitte = self.f.centralWidget()
-        self.assertLess(self.f.build.x(), 60)
+        self.assertLess(self.f.build.x(), 60)  # unten links
         self.assertGreater(self.f.build.y(), mitte.height() - 60)
         self.assertLess(self.f.build.graphicsEffect().opacity(), 1)
+        self.assertRegex(self.f.uhr.text(), r"^\d\d:\d\d:\d\d$")
 
-    def test_overlayliste_mit_tally(self):
-        self.assertEqual([z.overlay.name for z in self.f.overlayliste.zeilen.values()],
+    def test_bibliothek_mit_lampen(self):
+        self.assertEqual([k.overlay.name for k in self.f.bibliothek.kacheln.values()],
                          ["Bauchbinde", "News-Ticker", "Countdown"])
-        ticker = self.zeile("News-Ticker")
-        self.assertEqual(ticker.tally._farbe.name().upper(), self.E.farben.tally_an.upper())
-        self.assertEqual(ticker.schalter.text(), self.E.texte.knopf_aus)
-        bauchbinde = self.zeile("Bauchbinde")
-        self.assertEqual(bauchbinde.tally._farbe.name().upper(), self.E.farben.tally_aus.upper())
-        self.assertEqual(bauchbinde.schalter.text(), self.E.texte.knopf_ein)
+        self.assertEqual(self.kachel("News-Ticker").zustand, LIVE)  # roter Rahmen
+        self.assertEqual(self.kachel("Bauchbinde").zustand, BEREIT)  # grüner Rahmen
+        self.assertIn("Live", self.kachel("News-Ticker").accessibleName())
+        # erstes Overlay ist gleich ausgewählt
+        self.assertTrue(self.kachel("Bauchbinde").isChecked())
+        self.assertIs(self.f.bedienfelder.currentWidget(), self.f.overlay_bedienfeld)
 
-    def test_ein_und_ausblenden_per_klick(self):
-        z = self.zeile("Bauchbinde")
-        klick(z.schalter)
-        self.assertTrue(warte_bis(lambda: z.schalter.text() == self.E.texte.knopf_aus, 3000))
-        self.assertTrue(self.netz.overlays[0]["visible"])
-        self.assertEqual(z.tally._farbe.name().upper(), self.E.farben.tally_an.upper())
-        klick(z.schalter)
-        self.assertTrue(warte_bis(lambda: z.schalter.text() == self.E.texte.knopf_ein, 3000))
-        self.assertFalse(self.netz.overlays[0]["visible"])
-
-    def test_bedienfeld_und_texte(self):
+    def test_einblenden_ausblenden(self):
         b = self.f.overlay_bedienfeld
-        klick(self.zeile("Bauchbinde").name)
-        self.assertIs(self.f.bedienfelder.currentWidget(), b)
+        klick(self.kachel("Bauchbinde"))
         self.assertEqual(b.name.text(), "Bauchbinde")
-        self.assertEqual(b.tally_text.text(), self.E.texte.overlay_ausgeblendet)
-        self.assertTrue(warte_bis(lambda: list(b.eingaben) == ["Name", "Titel"], 3000))
-        # großer Knopf im Bedienfeld blendet ein, Liste folgt
-        klick(b.schalter)
-        self.assertTrue(warte_bis(lambda: b.tally_text.text() == self.E.texte.overlay_im_stream, 3000))
-        self.assertEqual(self.zeile("Bauchbinde").schalter.text(), self.E.texte.knopf_aus)
-        # Text ändern
-        b.eingaben["Titel"].setText("Heute: Neues Spiel!")
+        self.assertFalse(b.ausblenden.isEnabled())  # ist schon aus
+        klick(b.einblenden)
+        self.assertTrue(warte_bis(lambda: self.netz.overlays[0]["visible"], 3000))
+        self.assertTrue(warte_bis(lambda: self.kachel("Bauchbinde").zustand == LIVE, 3000))
+        self.assertEqual(b.tally_text.text(), self.E.texte.overlay_im_stream)
+        self.assertFalse(b.einblenden.isEnabled())
+        klick(b.ausblenden)
+        self.assertTrue(warte_bis(lambda: not self.netz.overlays[0]["visible"], 3000))
+        self.assertTrue(warte_bis(lambda: self.kachel("Bauchbinde").zustand == BEREIT, 3000))
+
+    def test_texte_aendern(self):
+        b = self.f.overlay_bedienfeld
+        klick(self.kachel("Bauchbinde"))
+        self.assertTrue(warte_bis(lambda: len(b.eingaben) == 2, 3000))
+        self.assertFalse(b.countdown.isVisible())  # kein Countdown bei der Bauchbinde
+        b.eingabe("Titel").setText("Heute: Neues Spiel!")
         klick(b.knopf_uebernehmen)
         self.assertTrue(warte_bis(lambda: b.meldung_texte.text() == self.E.texte.meldung_texte_ok, 3000))
         self.assertEqual(self.netz.inhalte["ov-1"]["Titel"], "Heute: Neues Spiel!")
-        self.assertEqual(self.netz.inhalte["ov-1"]["Name"], "Kevin")  # unverändert, nicht neu gesendet
-        self.assertEqual(sum(1 for _m, _p, d in self.netz.anfragen
-                             if isinstance(d, dict) and d.get("command") == "SetOverlayContentField"), 1)
+        self.assertEqual(self.netz.inhalte["ov-1"]["Name"], "Kevin")
+        self.assertEqual(self.netz.anzahl("SetOverlayContentField"), 1)  # nur das geänderte Feld
         klick(b.knopf_uebernehmen)
         self.assertEqual(b.meldung_texte.text(), self.E.texte.meldung_texte_nichts)
 
     def test_overlay_ohne_texte(self):
         b = self.f.overlay_bedienfeld
-        klick(self.zeile("Countdown").name)
+        klick(self.kachel("Countdown"))
         self.assertTrue(warte_bis(lambda: b.knopf_texte_neu.isEnabled(), 3000))
         self.assertEqual(b.eingaben, {})
         self.assertFalse(b.knopf_uebernehmen.isEnabled())
 
     def test_neues_overlay_liste_neu_laden(self):
         self.netz.overlays.append({"id": "ov-4", "name": "Uhr", "visible": False})
-        klick(self.f.overlayliste.knopf_neu)
-        self.assertTrue(warte_bis(lambda: len(self.f.overlayliste.zeilen) == 4, 3000))
-        self.assertEqual(list(self.f.overlayliste.zeilen.values())[-1].overlay.name, "Uhr")
+        klick(self.f.bibliothek.knopf_neu)
+        self.assertTrue(warte_bis(lambda: len(self.f.bibliothek.kacheln) == 4, 3000))
+        self.assertEqual(list(self.f.bibliothek.kacheln.values())[-1].overlay.name, "Uhr")
 
     def test_uno_fehler_wird_angezeigt(self):
+        b = self.f.overlay_bedienfeld
+        klick(self.kachel("Bauchbinde"))
         self.netz.uno_kaputt = True
-        klick(self.zeile("Bauchbinde").schalter)
-        self.assertTrue(warte_bis(lambda: self.f.uno_meldung.text() == self.E.texte.meldung_uno_fehler, 3000))
-        self.assertTrue(self.zeile("Bauchbinde").schalter.isEnabled())
+        klick(b.einblenden)
+        self.assertTrue(warte_bis(lambda: b.meldung_schalter.text() == self.E.texte.meldung_uno_fehler, 3000))
+        self.assertTrue(b.einblenden.isEnabled())  # gleich nochmal versuchbar
 
     def test_verbindung_und_on_air(self):
         self.m.starten()  # OBS „läuft schon“ → nur verbinden
         self.assertTrue(warte_bis(lambda: self.v.verbunden, 3000))
         self.assertTrue(self.f.meldungsleiste.isHidden())
-        self.assertEqual(self.f.on_air.text(), self.E.texte.on_air_aus)
+        self.assertEqual(self.f.on_air.text.text(), self.E.texte.on_air_aus)
         self.obs.stream_starten()
-        self.assertTrue(warte_bis(lambda: self.f.on_air.text() == self.E.texte.on_air_an))
+        self.assertTrue(warte_bis(lambda: self.f.on_air.text.text() == self.E.texte.on_air_an))
         self.assertIn(self.E.farben.on_air_an, self.f.on_air.styleSheet())
+        self.assertTrue(self.f.vorschaubild.live)  # roter Rahmen um das Live-Bild
         self.obs.stream_stoppen()
-        self.assertTrue(warte_bis(lambda: self.f.on_air.text() == self.E.texte.on_air_aus))
+        self.assertTrue(warte_bis(lambda: self.f.on_air.text.text() == self.E.texte.on_air_aus))
+        self.assertFalse(self.f.vorschaubild.live)
 
     def test_vorschau_im_fenster(self):
         self.m.starten()
@@ -203,17 +206,92 @@ class FensterTest(Grundlage):
         warte(50)
         self.assertNotIsInstance(QApplication.focusWidget(), QPushButton)
 
-    def test_knoepfe_gross_genug(self):
-        klick(self.zeile("Bauchbinde").name)
+    def test_knoepfe_gross_genug_und_ohne_ueberlappung(self):
+        klick(self.kachel("Bauchbinde"))
         warte_bis(lambda: self.f.overlay_bedienfeld.eingaben, 3000)
-        for k in self.f.findChildren(QPushButton):
-            if k.isVisible():
-                self.assertGreaterEqual(k.height(), self.E.groessen.knopf_hoehe, k.text())
-                self.assertGreaterEqual(k.width(), 100, k.text())
+        sichtbar = [k for k in self.f.findChildren(QPushButton) if k.isVisible()]
+        for k in sichtbar:
+            self.assertGreaterEqual(k.height(), self.E.groessen.knopf_hoehe, k.text())
+            self.assertGreaterEqual(k.width(), 70, k.text())
+        for k in self.f.bibliothek.kacheln.values():
+            self.assertGreaterEqual(k.height(), 100)
+            self.assertGreaterEqual(k.width(), 150)
+        b = self.f.overlay_bedienfeld
+        self.assertLessEqual(b.einblenden.geometry().right(), b.ausblenden.geometry().left())
 
-    def test_knoepfe_ueberlappen_nicht(self):
-        z = self.zeile("Bauchbinde")
-        self.assertLessEqual(z.name.geometry().right(), z.schalter.geometry().left())
+
+class EinzelUnoFensterTest(Grundlage):
+    """Kevins „Countdown | Circles“ im Fenster: Ein/Aus, Countdown, Dauer, Texte."""
+    mit_uno = False
+
+    def setUp(self):
+        super().setUp()
+        self.e = self.netz.einzel
+        e = self.f.uno_einrichtung
+        e._zwischenablage = lambda: EINZEL_ADRESSE_TEXT
+        klick(e.einfuegen)
+        self.assertTrue(warte_bis(lambda: e.meldung.text() == self.E.texte.meldung_uno_einzel_ok, 3000))
+        self.assertEqual(e.meldung.objectName(), "gut")  # grün, nicht rot
+        klick(e.zurueck)
+        self.b = self.f.overlay_bedienfeld
+        self.assertTrue(warte_bis(lambda: self.b.overlay is not None and self.b.countdown.isVisible()
+                                  and self.b.eingaben, 3000))
+
+    def test_kachel_und_bedienfeld(self):
+        k = self.kachel("Countdown | Circles")
+        self.assertTrue(k.isChecked())
+        self.assertEqual(k.zustand, BEREIT)
+        self.assertEqual(k.zeit_text(), "05:00")
+        self.assertTrue(warte_bis(lambda: k.bild is not None, 3000))  # Vorschaubild von Uno geladen
+        self.assertEqual(self.b.zeit.text(), "05:00")
+        self.assertEqual(self.b.countdown_zustand.text(), self.E.texte.countdown_bereit)
+        self.assertEqual(list(self.b.eingaben), [(CONTENT, "Message")])
+
+    def test_einblenden_komplett(self):
+        klick(self.b.einblenden)
+        self.assertTrue(warte_bis(lambda: self.e.komplett_sichtbar(), 3000))
+        self.assertTrue(warte_bis(lambda: self.kachel("Countdown | Circles").zustand == LIVE, 3000))
+        klick(self.b.ausblenden)
+        self.assertTrue(warte_bis(lambda: self.e.ganz_aus(), 3000))
+
+    def test_countdown_bedienen(self):
+        t = self.E.texte
+        self.assertFalse(self.b.pause.isEnabled())
+        klick(self.b.start)
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_laeuft, 3000))
+        self.assertTrue(self.e.werte[CONTENT]["Timer"]["isRunning"])
+        self.assertFalse(self.b.start.isEnabled())
+        warte(1300)
+        self.assertEqual(self.b.zeit.text(), "04:59")  # zählt sichtbar herunter
+        klick(self.b.pause)
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_pausiert, 3000))
+        klick(self.b.zurueck)
+        self.assertTrue(warte_bis(lambda: self.b.zeit.text() == "05:00", 3000))
+        self.assertEqual(self.b.countdown_zustand.text(), t.countdown_bereit)
+
+    def test_dauer_einstellen(self):
+        klick(self.b.dauer_knoepfe[600])
+        self.assertEqual(self.b.zeit.text(), "15:00")  # sofort sichtbar
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 900, 3000))
+        klick(self.b.dauer_knoepfe[-60])
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 840, 3000))
+        for _ in range(3):
+            klick(self.b.dauer_knoepfe[-600])
+            warte(200)
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 0, 3000))  # nie negativ
+
+    def test_endtext_aendern(self):
+        self.b.eingabe("Message").setText("Gleich geht's los!")
+        klick(self.b.knopf_uebernehmen)
+        self.assertTrue(warte_bis(lambda: self.b.meldung_texte.text() == self.E.texte.meldung_texte_ok, 3000))
+        self.assertEqual(self.e.werte[CONTENT]["Message"], "Gleich geht's los!")
+
+    def test_knoepfe_passen_in_die_spalte(self):
+        rechts = self.b.width()
+        for k in [self.b.start, self.b.pause, self.b.zurueck, *self.b.dauer_knoepfe.values()]:
+            self.assertTrue(k.isVisible(), k.text())
+            self.assertLessEqual(k.mapTo(self.b, k.rect().topRight()).x(), rechts, k.text())
+            self.assertGreaterEqual(k.height(), self.E.groessen.knopf_hoehe)
 
 
 class TwitchFensterTest(Grundlage):
@@ -227,7 +305,6 @@ class TwitchFensterTest(Grundlage):
         self.assertTrue(warte_bis(lambda: self.twitch.zustand is Anmeldung.WARTET, 3000))
         self.assertIn("ABCD-EFGH", tb.hinweis.text())
         self.assertEqual(len(self.geoeffnet), 1)  # Twitch-Seite automatisch geöffnet
-        self.assertTrue(tb.seite_oeffnen.isVisible())
         klick(tb.seite_oeffnen)
         self.assertEqual(len(self.geoeffnet), 2)
         self.netz.bestaetigt = True
@@ -243,21 +320,7 @@ class TwitchFensterTest(Grundlage):
 
     def test_ohne_uno_projekt_einrichtung_zeigen(self):
         self.assertIs(self.f.bedienfelder.currentWidget(), self.f.uno_einrichtung)
-        self.assertTrue(self.f.overlayliste.leer.isVisible())
-
-    def test_einzel_uno_per_zwischenablage(self):
-        """Fehler aus Build 1.1: ein einzelnes „Countdown | Circles“-Uno ließ sich nicht einfügen."""
-        e = self.f.uno_einrichtung
-        e._zwischenablage = lambda: EINZEL_ADRESSE_TEXT
-        klick(e.einfuegen)
-        self.assertTrue(warte_bis(lambda: e.meldung.text() == self.E.texte.meldung_uno_einzel_ok, 3000))
-        self.assertEqual(e.meldung.objectName(), "gut")  # grün, nicht rot
-        self.assertEqual(len(self.f.overlayliste.zeilen), 1)
-        z = next(iter(self.f.overlayliste.zeilen.values()))
-        self.assertTrue(z.isVisible())
-        klick(z.schalter)
-        self.assertTrue(warte_bis(lambda: self.netz.einzel["visible"], 3000))
-        self.assertTrue(warte_bis(lambda: z.schalter.text() == self.E.texte.knopf_aus, 3000))
+        self.assertTrue(self.f.bibliothek.leer.isVisible())
 
     def test_uno_projekt_per_zwischenablage(self):
         e = self.f.uno_einrichtung
@@ -266,16 +329,14 @@ class TwitchFensterTest(Grundlage):
         self.assertTrue(warte_bis(lambda: e.meldung.text() == self.E.texte.meldung_uno_adresse_falsch, 3000))
         e._zwischenablage = lambda: UNO_ADRESSE_TEXT + "\n"
         klick(e.einfuegen)
-        self.assertTrue(warte_bis(lambda: len(self.f.overlayliste.zeilen) == 3, 3000))
+        self.assertTrue(warte_bis(lambda: len(self.f.bibliothek.kacheln) == 3, 3000))
         self.assertTrue(warte_bis(lambda: "3" in e.meldung.text(), 3000))
         self.assertIn(UNO_TOKEN, self.speicher.daten["uno"])
-        # Entfernen braucht zwei Klicks
-        k = e.entfernen_knoepfe[UNO_TOKEN]
-        klick(k)
+        klick(e.entfernen_knoepfe[UNO_TOKEN])  # Entfernen braucht zwei Klicks
         self.assertEqual(len(self.uno.projekte), 1)
         klick(e.entfernen_knoepfe[UNO_TOKEN])
         self.assertEqual(self.uno.projekte, [])
-        self.assertEqual(self.f.overlayliste.zeilen, {})
+        self.assertEqual(self.f.bibliothek.kacheln, {})
 
 
 if __name__ == "__main__":

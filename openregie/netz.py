@@ -41,7 +41,8 @@ class Netz(QObject):
         self._offen: set[QNetworkReply] = set()
 
     def anfrage(self, methode: str, adresse: str, rueckruf: NetzRueckruf, *, json_daten=None,
-                formular: dict | None = None, kopfzeilen: dict | None = None) -> None:
+                formular: dict | None = None, kopfzeilen: dict | None = None, roh: bool = False) -> None:
+        """roh=True: die Antwort kommt als Bytes (z. B. ein Bild), nicht als JSON."""
         anfrage = QNetworkRequest(QUrl(adresse))
         anfrage.setAttribute(QNetworkRequest.Attribute.RedirectPolicyAttribute,
                              QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy)
@@ -61,9 +62,9 @@ class Netz(QObject):
         uhr.setSingleShot(True)
         uhr.timeout.connect(antwort.abort)
         uhr.start(self._zeitlimit_ms)
-        antwort.finished.connect(lambda a=antwort: self._fertig(a, rueckruf))
+        antwort.finished.connect(lambda a=antwort: self._fertig(a, rueckruf, roh))
 
-    def _fertig(self, antwort: QNetworkReply, rueckruf: NetzRueckruf) -> None:
+    def _fertig(self, antwort: QNetworkReply, rueckruf: NetzRueckruf, roh_gewuenscht: bool = False) -> None:
         self._offen.discard(antwort)
         code = antwort.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute) or 0
         roh = bytes(antwort.readAll())
@@ -72,7 +73,9 @@ class Netz(QObject):
             fehler = antwort.errorString()
         antwort.deleteLater()
         daten = None
-        if roh:
+        if roh_gewuenscht:
+            daten = roh
+        elif roh:
             try:
                 daten = json.loads(roh)
             except ValueError:

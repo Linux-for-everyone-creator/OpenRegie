@@ -104,7 +104,7 @@ class TwitchBereich(QWidget):
             self.hinweis.setText(t.twitch_abgemeldet)
         elif wartet:
             self.hinweis.setText(t.twitch_wartet.format(code=self._code_text))
-            self.hinweis.setObjectName("tally_text")
+            self.hinweis.setObjectName("ueberschrift")
             self.hinweis.style().unpolish(self.hinweis)
             self.hinweis.style().polish(self.hinweis)
             return

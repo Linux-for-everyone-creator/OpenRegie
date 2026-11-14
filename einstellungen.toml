@@ -54,7 +54,11 @@ qualitaet = 75
 # Adresse des Uno-Servers. Nur ändern, wenn Uno umzieht.
 basisadresse = "https://app.overlays.uno"
 # Wie oft OpenRegie bei Uno nachschaut, welche Overlays gerade sichtbar sind (Sekunden).
-abfrage_sekunden = 5
+# Uno erlaubt nur 10.000 Anfragen am Tag – darum nicht zu oft (20 s ≈ 4.300 am Tag pro Projekt).
+# Nach jedem eigenen Klick stimmt das Tally-Licht sofort.
+abfrage_sekunden = 20
+# Längste Countdown-Dauer, die man einstellen kann (Sekunden). 35999 = 9:59:59.
+countdown_hoechstdauer_sekunden = 35999
 
 
 # ---------------------------------------------------------------------
@@ -73,48 +77,54 @@ api_adresse = "https://api.twitch.tv/helix"
 #  Farben des Regiepults
 # ---------------------------------------------------------------------
 [farben]
-hintergrund = "#15171C"
-flaeche = "#1F232B"
-flaeche_hell = "#2A2F3A"
-rahmen = "#3A4150"
+# Grundfarben (dunkles Regiepult)
+hintergrund = "#0E1014"
+flaeche = "#16191F"
+flaeche_hell = "#1E222A"
+rahmen = "#272B34"
 text = "#F2F4F8"
-text_gedimmt = "#9AA3B2"
+text_gedimmt = "#8B93A1"
+# Gelb des Logos (oben links)
+logo = "#F2B035"
+logo_symbol = "#16191F"
 
-knopf = "#323846"
+knopf = "#1E222A"
 knopf_text = "#F2F4F8"
 # Farbe, wenn der Joystick-Zeiger über einem Knopf ist.
-knopf_hover = "#4A5568"
-knopf_hover_rahmen = "#FFD23F"
+knopf_hover = "#2A2F3A"
+knopf_hover_rahmen = "#F2B035"
 # Rahmen, wenn ein Knopf mit der Tab-Taste ausgewählt ist.
 knopf_fokus_rahmen = "#5B9BFF"
-knopf_gedrueckt = "#5A6578"
-knopf_aus = "#24282F"
-knopf_aus_text = "#5C6370"
+knopf_gedrueckt = "#363C49"
+knopf_aus = "#15171C"
+knopf_aus_text = "#4D5462"
 
 # Knopf „Einblenden“ und „Ausblenden“
-einblenden = "#1F8A4C"
-ausblenden = "#B3261E"
+einblenden = "#2EA043"
+ausblenden = "#E5484D"
 # Knopf „Mit Twitch anmelden“
 twitch = "#7A3FE0"
 
-status_verbunden = "#2ECC71"
-status_verbinde = "#F1C40F"
-status_getrennt = "#E74C3C"
+status_verbunden = "#3FB950"
+status_verbinde = "#F2B035"
+status_getrennt = "#E5484D"
 
-on_air_an = "#FF1E1E"
+on_air_an = "#E5484D"
 on_air_an_text = "#FFFFFF"
-on_air_aus = "#3A1414"
-on_air_aus_text = "#7A4A4A"
+on_air_aus = "#2A1416"
+on_air_aus_text = "#7A4A4D"
 on_air_startet = "#C0611B"
 
-# Tally-Licht pro Overlay
-tally_an = "#FF1E1E"
+# Lampen der Overlays (Rahmen der Kacheln)
+tally_an = "#E5484D"
+tally_bereit = "#3FB950"
 tally_aus = "#3A3F4B"
-tally_unbekannt = "#6B7385"
+# Rahmen der ausgewählten Kachel
+kachel_auswahl = "#5B9BFF"
 
-eingabe_hintergrund = "#0F1115"
+eingabe_hintergrund = "#0B0D10"
 auswahl = "#2D6CDF"
-meldung_gut = "#2ECC71"
+meldung_gut = "#3FB950"
 meldung_fehler = "#FF6B5E"
 # Build-Anzeige unten links (Wasserzeichen wie bei Windows-Vorabversionen)
 build_text = "#FFFFFF"
@@ -124,6 +134,8 @@ build_text = "#FFFFFF"
 #  Größen im Regiepult (Pixel)
 # ---------------------------------------------------------------------
 [groessen]
+# Schriftart des Regiepults (muss installiert sein, z. B. "Inter" oder "Noto Sans")
+schriftart = "Noto Sans"
 schrift = 20
 schrift_klein = 16
 schrift_titel = 30
@@ -134,12 +146,17 @@ knopf_rundung = 12
 rahmen_dick = 4
 abstand = 16
 lampe = 36
-tally = 30
-on_air_breite = 260
-on_air_hoehe = 72
-overlayliste_breite = 470
-overlay_zeilenhoehe = 72
-seitenleiste_breite = 520
+on_air_breite = 230
+on_air_hoehe = 64
+schrift_uhr = 44
+logo = 64
+karten_rundung = 16
+bibliothek_breite = 480
+kachel_hoehe = 120
+kachel_rahmen = 4
+schrift_kachel_zeit = 34
+schrift_countdown = 64
+seitenleiste_breite = 560
 eingabe_hoehe = 64
 # Deckkraft der Build-Anzeige: 0 = unsichtbar, 1 = voll.
 build_deckkraft = 0.35
@@ -174,7 +191,7 @@ on_air_stoppt = "STOPPT …"
 knopf_obs_starten = "OBS starten"
 knopf_verbinden = "Neu verbinden"
 
-vorschau_ueberschrift = "Live-Vorschau"
+vorschau_ueberschrift = "Live-Bild"
 vorschau_keine_verbindung = "Keine Vorschau.\nOBS ist nicht verbunden."
 vorschau_wartet = "Vorschau wird geladen …"
 
@@ -183,25 +200,43 @@ start_obs = "OBS wird im Hintergrund gestartet …"
 start_verbinde = "Verbinde mit OBS …"
 start_fertig = "Alles bereit!"
 
-# Overlays
-overlays_ueberschrift = "Overlays"
-overlays_leer = "Noch keine Overlays.\nFüge rechts dein Uno-Projekt hinzu."
-knopf_ein = "Ein"
-knopf_aus = "Aus"
-knopf_einblenden = "Einblenden"
-knopf_ausblenden = "Ausblenden"
-knopf_liste_neu = "Liste neu laden"
-knopf_uno_einrichten = "Uno-Projekte"
-overlay_im_stream = "IM STREAM"
+# Bibliothek (Overlays von Uno)
+overlays_ueberschrift = "Bibliothek"
+overlays_leer = "Noch keine Overlays.\nKlicke auf „+“ und füge dein Uno-Projekt hinzu."
+knopf_liste_neu = "↻"
+knopf_liste_neu_name = "Liste neu laden"
+knopf_uno_einrichten = "+"
+knopf_uno_einrichten_name = "Uno-Projekt hinzufügen"
+lampen_ueberschrift = "LAMPEN"
+lampe_live = "Live"
+lampe_bereit = "Bereit"
+lampe_aus = "Aus"
+
+# Ausgewählt (rechte Spalte)
+ausgewaehlt = "AUSGEWÄHLT"
+knopf_einblenden = "▶  Einblenden"
+knopf_ausblenden = "■  Ausblenden"
+overlay_im_stream = "Im Stream"
 overlay_ausgeblendet = "Ausgeblendet"
 overlay_unbekannt = "Zustand unbekannt"
 overlay_texte = "Texte"
 overlay_keine_texte = "Dieses Overlay hat keine Texte zum Ändern."
-overlay_texte_laden = "Texte werden geladen …"
+overlay_texte_laden = "Wird geladen …"
 knopf_texte_uebernehmen = "Texte übernehmen"
-knopf_texte_neu = "Texte neu laden"
+knopf_texte_neu = "Neu laden"
 meldung_texte_ok = "Fertig! Die Texte sind im Overlay."
 meldung_texte_nichts = "Es wurde nichts geändert."
+
+# Countdown (bei Uno-Overlays mit Zeitgeber)
+countdown_ueberschrift = "Countdown"
+knopf_countdown_start = "▶  Start"
+knopf_countdown_pause = "❚❚  Pause"
+knopf_countdown_reset = "↺  Zurück"
+countdown_dauer = "Dauer"
+countdown_laeuft = "Läuft"
+countdown_pausiert = "Angehalten"
+countdown_bereit = "Bereit"
+countdown_abgelaufen = "Abgelaufen"
 
 # Uno-Projekte einrichten
 uno_ueberschrift = "Uno-Projekte"
