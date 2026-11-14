@@ -15,7 +15,7 @@ from typing import Callable
 
 from .verbindung import ZEITLIMIT_TEXT, ObsVerbindung
 
-log = logging.getLogger("rolliregie.einrichten")
+log = logging.getLogger("openregie.einrichten")
 
 BROWSER_ART = "browser_source"
 CODE_NICHT_GEFUNDEN = "600"  # OBS: „ResourceNotFound“

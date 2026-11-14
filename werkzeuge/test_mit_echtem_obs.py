@@ -4,16 +4,16 @@ Startet ein eigenes Test-OBS mit leeren Einstellungen in einem Wegwerf-Ordner,
 einen kleinen Test-Streamempfänger (ffmpeg) auf diesem PC und prüft:
 Verbindung, Passwort, Countdown einrichten, Vorschau, On Air, Abbruch und Neustart.
 
-Aufruf (aus dem Rolliregie-Ordner):  python3 werkzeuge/test_mit_echtem_obs.py
-Vorher Rolliregie schließen (der Test braucht die Countdown-Seite für sich).
+Aufruf (aus dem OpenRegie-Ordner):  python3 werkzeuge/test_mit_echtem_obs.py
+Vorher OpenRegie schließen (der Test braucht die Countdown-Seite für sich).
 """
 import os, sys, time, subprocess, signal, tempfile, json, shutil
 from pathlib import Path
 
-S = tempfile.mkdtemp(prefix="rolliregie-obs-test-")
+S = tempfile.mkdtemp(prefix="openregie-obs-test-")
 K = Path(S) / "obs-test" / "obs-studio"
 (K / "plugin_config/obs-websocket").mkdir(parents=True)
-(K / "basic/profiles/Rolliregie_Test").mkdir(parents=True)
+(K / "basic/profiles/OpenRegie_Test").mkdir(parents=True)
 (K / "plugin_config/obs-websocket/config.json").write_text(json.dumps({
     "alerts_enabled": False, "auth_required": True, "first_load": False, "server_enabled": True,
     "server_password": "testpasswort123", "server_port": 4466}))
@@ -23,10 +23,10 @@ EnableAutoUpdates=false
 ConfirmOnExit=false
 
 [Basic]
-Profile=Rolliregie_Test
-ProfileDir=Rolliregie_Test
-SceneCollection=Rolliregie_Test
-SceneCollectionFile=Rolliregie_Test
+Profile=OpenRegie_Test
+ProfileDir=OpenRegie_Test
+SceneCollection=OpenRegie_Test
+SceneCollectionFile=OpenRegie_Test
 
 [BasicWindow]
 SysTrayEnabled=true
@@ -36,23 +36,23 @@ WarnBeforeStoppingStream=false
 """
 (K / "global.ini").write_text(ini)
 (K / "user.ini").write_text(ini)
-(K / "basic/profiles/Rolliregie_Test/basic.ini").write_text(
-    "[General]\nName=Rolliregie_Test\n\n[Video]\nBaseCX=1280\nBaseCY=720\nOutputCX=1280\nOutputCY=720\nFPSCommon=30\n")
-(K / "basic/profiles/Rolliregie_Test/service.json").write_text(json.dumps(
+(K / "basic/profiles/OpenRegie_Test/basic.ini").write_text(
+    "[General]\nName=OpenRegie_Test\n\n[Video]\nBaseCX=1280\nBaseCY=720\nOutputCX=1280\nOutputCY=720\nFPSCommon=30\n")
+(K / "basic/profiles/OpenRegie_Test/service.json").write_text(json.dumps(
     {"type": "rtmp_custom", "settings": {"server": "rtmp://127.0.0.1:19350/live", "key": "test", "use_auth": False}}))
 
-os.environ["XDG_CONFIG_HOME"] = f"{S}/obs-test"   # Rolliregie liest Port/Passwort hier automatisch
+os.environ["XDG_CONFIG_HOME"] = f"{S}/obs-test"   # OpenRegie liest Port/Passwort hier automatisch
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PySide6.QtWidgets import QApplication
-from rolliregie import einstellungen
-from rolliregie.obs.verbindung import ObsVerbindung, Sendung, Status
-from rolliregie.obs.vorschau import Vorschau
-from rolliregie.obs.einrichten import CountdownEinrichten
-from rolliregie.obs import zugang
-from rolliregie.titel.countdown import Countdown
-from rolliregie.web.server import LokaleWebseite
+from openregie import einstellungen
+from openregie.obs.verbindung import ObsVerbindung, Sendung, Status
+from openregie.obs.vorschau import Vorschau
+from openregie.obs.einrichten import CountdownEinrichten
+from openregie.obs import zugang
+from openregie.titel.countdown import Countdown
+from openregie.web.server import LokaleWebseite
 from tests.hilfen import warte, warte_bis
 
 app = QApplication([])
@@ -130,7 +130,7 @@ c_obs = (cpu(obs_pid) - c_obs0) / dauer * 100
 c_wir = (time.process_time() - c_wir0) / dauer * 100
 fps = len(bilder) / dauer
 pruef("Vorschau liefert Bilder", fps >= 5, f"{fps:.1f} Bilder/s (Ziel {E.vorschau.bilder_pro_sekunde}), "
-      f"Rechenlast: OBS {c_obs:.0f}% eines Kerns, Rolliregie {c_wir:.0f}%")
+      f"Rechenlast: OBS {c_obs:.0f}% eines Kerns, OpenRegie {c_wir:.0f}%")
 if bilder:
     bilder[-1].save(f"{S}/vorschau.png")
     print("      Vorschaubild gespeichert:", f"{S}/vorschau.png")

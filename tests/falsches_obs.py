@@ -15,7 +15,7 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtNetwork import QHostAddress
 from PySide6.QtWebSockets import QWebSocketProtocol, QWebSocketServer
 
-from rolliregie.obs.verbindung import anmeldeschluessel
+from openregie.obs.verbindung import anmeldeschluessel
 
 SALZ = "salzSALZ123"
 AUFGABE = "aufgabe456"

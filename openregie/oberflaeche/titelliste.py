@@ -1,4 +1,4 @@
-"""Liste aller Rolliregie-Titel (linke Seite). Ein Klick wählt einen Titel aus.
+"""Liste aller OpenRegie-Titel (linke Seite). Ein Klick wählt einen Titel aus.
 
 Vorbereitet für später: Tally-Licht pro Titel (1.1), Knopf „Bearbeiten“ (1.2).
 """

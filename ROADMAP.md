@@ -1,4 +1,4 @@
-# Rolliregie – Roadmap
+# OpenRegie – Roadmap
 
 *Barrierefrei streamen.* Eigene Sendezentrale für CachyOS. OBS läuft als Motor im Hintergrund
 und wird über den OBS-WebSocket gesteuert.
@@ -14,7 +14,7 @@ keine Tastenkombination als einziger Weg, wenig Tippen, alle Texte auf Deutsch.
 - [x] Live-Vorschau des Sendebilds (Einzelbilder über den WebSocket statt virtueller Kamera)
 - [x] Rotes „On Air“-Licht, wenn OBS live streamt
 - [x] Countdown: Dauer mit Plus/Minus, Start, Pause, Stopp – als lokale Seite, die OBS als Browserquelle einbindet
-- [x] Einfache Liste aller Rolliregie-Titel
+- [x] Einfache Liste aller OpenRegie-Titel
 - [x] Build-Anzeige unten links (liest die Nummer automatisch aus der Datei `VERSION`)
 - [x] Startmenü-Eintrag
 
@@ -36,7 +36,7 @@ keine Tastenkombination als einziger Weg, wenig Tippen, alle Texte auf Deutsch.
 - [ ] Stream Dock
 
 ## Technische Vorplanung
-- Jeder Titel ist ein eigener Baustein (`rolliregie/titel/`) mit einem „Antrieb“:
-  `lokal` (Rolliregie zeichnet ihn selbst, z. B. Countdown, Uhr) oder `uno` (Overlays.uno, ab Build 1.1).
-- Die lokale Webseite (`rolliregie/web/`) kann weitere Seiten bekommen (z. B. Uhr).
+- Jeder Titel ist ein eigener Baustein (`openregie/titel/`) mit einem „Antrieb“:
+  `lokal` (OpenRegie zeichnet ihn selbst, z. B. Countdown, Uhr) oder `uno` (Overlays.uno, ab Build 1.1).
+- Die lokale Webseite (`openregie/web/`) kann weitere Seiten bekommen (z. B. Uhr).
 - Zugangsdaten für Overlays.uno kommen später in `daten/geheim.toml` – diese Datei wird nicht in Git gespeichert.

@@ -108,7 +108,7 @@ class LokaleWebseite:
         self._server = ThreadingHTTPServer(("127.0.0.1", self.port), Anfrage)
         self._server.daemon_threads = True
         self.port = self._server.server_address[1]  # wichtig, falls Port 0 (Tests)
-        self._thread = threading.Thread(target=self._server.serve_forever, name="Rolliregie-Webseite", daemon=True)
+        self._thread = threading.Thread(target=self._server.serve_forever, name="OpenRegie-Webseite", daemon=True)
         self._thread.start()
 
     def beenden(self) -> None:

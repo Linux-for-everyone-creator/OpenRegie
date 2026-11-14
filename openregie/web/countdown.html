@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<title>Rolliregie Countdown</title>
+<title>OpenRegie Countdown</title>
 <style>
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%;
@@ -45,7 +45,7 @@
       anzeige.classList.toggle("endtext", ende);
       anzeige.style.visibility = "visible";
     } catch (e) {
-      // Rolliregie ist zu: nach kurzer Zeit ausblenden, damit keine alte Zeit stehen bleibt.
+      // OpenRegie ist zu: nach kurzer Zeit ausblenden, damit keine alte Zeit stehen bleibt.
       fehlschlaege += 1;
       if (fehlschlaege >= 5) anzeige.style.visibility = "hidden";
     }

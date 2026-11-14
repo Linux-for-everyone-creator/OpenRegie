@@ -1,4 +1,4 @@
-"""Programmstart von Rolliregie."""
+"""Programmstart von OpenRegie."""
 
 from __future__ import annotations
 
@@ -16,14 +16,14 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from . import einstellungen
 from .einstellungen import PROJEKT_ORDNER, EinstellungsFehler
 
-SYMBOL = PROJEKT_ORDNER / "daten" / "rolliregie.svg"
+SYMBOL = PROJEKT_ORDNER / "daten" / "openregie.svg"
 
 
 def protokoll_einrichten() -> Path:
-    """Schreibt ein Protokoll (für die Fehlersuche) nach ~/.local/state/rolliregie/."""
-    ordner = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "rolliregie"
+    """Schreibt ein Protokoll (für die Fehlersuche) nach ~/.local/state/openregie/."""
+    ordner = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "openregie"
     ordner.mkdir(parents=True, exist_ok=True)
-    datei = ordner / "rolliregie.log"
+    datei = ordner / "openregie.log"
     handler = logging.handlers.RotatingFileHandler(datei, maxBytes=1_000_000, backupCount=2, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     wurzel = logging.getLogger()
@@ -46,11 +46,11 @@ def hinweis(titel: str, text: str) -> None:
 
 def main() -> int:
     log_datei = protokoll_einrichten()
-    log = logging.getLogger("rolliregie")
+    log = logging.getLogger("openregie")
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Rolliregie")
-    app.setDesktopFileName("rolliregie")  # passt zum Startmenü-Eintrag (Symbol in der Taskleiste)
+    app.setApplicationName("OpenRegie")
+    app.setDesktopFileName("openregie")  # passt zum Startmenü-Eintrag (Symbol in der Taskleiste)
     if SYMBOL.exists():
         app.setWindowIcon(QIcon(str(SYMBOL)))
 
@@ -58,15 +58,15 @@ def main() -> int:
         E = einstellungen.lade()
         log.info("Starte %s (Protokoll: %s)", einstellungen.build_anzeige(E), log_datei)
     except EinstellungsFehler as fehler:
-        hinweis("Rolliregie", str(fehler))
+        hinweis("OpenRegie", str(fehler))
         return 1
 
-    # Nur ein Rolliregie-Fenster gleichzeitig
+    # Nur ein OpenRegie-Fenster gleichzeitig
     ordner = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.RuntimeLocation) or "/tmp"
-    sperre = QLockFile(os.path.join(ordner, "rolliregie.lock"))
+    sperre = QLockFile(os.path.join(ordner, "openregie.lock"))
     sperre.setStaleLockTime(0)
     if not sperre.tryLock(200):
-        hinweis("Rolliregie", E.texte.meldung_schon_offen)
+        hinweis("OpenRegie", E.texte.meldung_schon_offen)
         return 0
 
     from .obs.verbindung import ObsVerbindung
@@ -93,7 +93,7 @@ def main() -> int:
         vorschau = Vorschau(verbindung, E.vorschau)
         fenster = Hauptfenster(E, verbindung, vorschau, countdown, adresse, start_meldung)
     except EinstellungsFehler as fehler:
-        hinweis("Rolliregie", str(fehler))
+        hinweis("OpenRegie", str(fehler))
         return 1
 
     def aufraeumen():
@@ -101,7 +101,7 @@ def main() -> int:
         verbindung.beenden()
         webseite.beenden()
         sperre.unlock()
-        log.info("Rolliregie beendet")
+        log.info("OpenRegie beendet")
 
     app.aboutToQuit.connect(aufraeumen)
 

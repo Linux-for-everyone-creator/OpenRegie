@@ -1,6 +1,6 @@
 """Findet Port und Passwort von OBS automatisch und prüft, ob OBS läuft.
 
-OBS speichert die WebSocket-Einstellungen in einer Datei. Rolliregie liest sie,
+OBS speichert die WebSocket-Einstellungen in einer Datei. OpenRegie liest sie,
 damit niemand das Passwort abtippen muss.
 """
 

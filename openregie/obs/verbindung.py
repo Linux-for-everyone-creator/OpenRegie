@@ -1,6 +1,6 @@
 """Verbindung zu OBS über den OBS-WebSocket (Protokoll Version 5).
 
-Rolliregie ist hier der „Fernbediener“, OBS der Motor. Die Klasse
+OpenRegie ist hier der „Fernbediener“, OBS der Motor. Die Klasse
   - verbindet sich und meldet sich mit Passwort an,
   - versucht es bei Abbruch automatisch immer wieder,
   - schickt Anfragen und ruft bei der Antwort eine Funktion auf,
@@ -25,7 +25,7 @@ from PySide6.QtWebSockets import QWebSocket
 
 from . import zugang as zugang_modul
 
-log = logging.getLogger("rolliregie.obs")
+log = logging.getLogger("openregie.obs")
 
 # Protokoll-Nummern (OpCodes) aus der OBS-WebSocket-Beschreibung
 OP_HELLO, OP_IDENTIFY, OP_IDENTIFIED = 0, 1, 2

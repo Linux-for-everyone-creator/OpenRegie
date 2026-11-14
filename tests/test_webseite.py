@@ -4,9 +4,9 @@ import unittest
 import urllib.error
 import urllib.request
 
-from rolliregie import einstellungen
-from rolliregie.titel.countdown import Countdown
-from rolliregie.web.server import LokaleWebseite, countdown_seite
+from openregie import einstellungen
+from openregie.titel.countdown import Countdown
+from openregie.web.server import LokaleWebseite, countdown_seite
 
 
 def holen(url):
@@ -101,7 +101,7 @@ class EinstellungenTest(unittest.TestCase):
     def test_alles_vorhanden(self):
         E = einstellungen.lade()
         self.assertTrue(E.farben.hintergrund.startswith("#"))
-        self.assertEqual(einstellungen.build_anzeige(E), "Rolliregie Build " + einstellungen.build_nummer())
+        self.assertEqual(einstellungen.build_anzeige(E), "OpenRegie · Vorabversion · Build " + einstellungen.build_nummer())
 
     def test_fehlender_eintrag(self):
         E = einstellungen.lade()

@@ -3,8 +3,8 @@ import time
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication
 
-from rolliregie import einstellungen
-from rolliregie.obs.zugang import Zugang
+from openregie import einstellungen
+from openregie.obs.zugang import Zugang
 
 
 def app():

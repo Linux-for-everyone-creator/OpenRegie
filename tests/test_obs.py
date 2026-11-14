@@ -3,11 +3,11 @@ import unittest
 
 from PySide6.QtNetwork import QHostAddress
 
-from rolliregie.obs import verbindung as vmod
-from rolliregie.obs.einrichten import CountdownEinrichten
-from rolliregie.obs.verbindung import EREIGNISSE_AUSGABEN, ObsVerbindung, Sendung, Status, ZEITLIMIT_TEXT
-from rolliregie.obs.vorschau import Vorschau, bild_aus_daten
-from rolliregie.obs import zugang as zmod
+from openregie.obs import verbindung as vmod
+from openregie.obs.einrichten import CountdownEinrichten
+from openregie.obs.verbindung import EREIGNISSE_AUSGABEN, ObsVerbindung, Sendung, Status, ZEITLIMIT_TEXT
+from openregie.obs.vorschau import Vorschau, bild_aus_daten
+from openregie.obs import zugang as zmod
 
 from .falsches_obs import FalschesObs, testbild_daten
 from .hilfen import app, obs_einstellungen, warte, warte_bis, zugang
@@ -281,7 +281,7 @@ class VorschauTest(Grundlage):
     def neue_vorschau(self):
         einst = self.E.vorschau.als_dict()
         einst["bilder_pro_sekunde"] = 20
-        from rolliregie.einstellungen import Bereich
+        from openregie.einstellungen import Bereich
         return Vorschau(self.v, Bereich("vorschau", einst))
 
     def test_bilder_kommen(self):
@@ -339,7 +339,7 @@ class VorschauTest(Grundlage):
 
 class EinrichtenTest(Grundlage):
     ADRESSE = "http://127.0.0.1:8787/countdown"
-    NAME = "Rolliregie Countdown"
+    NAME = "OpenRegie Countdown"
 
     def einrichten(self):
         ergebnis = []
@@ -443,7 +443,7 @@ class ZugangTest(unittest.TestCase):
         self.assertFalse(zmod.obs_laeuft(pathlib.Path("/gibt/es/nicht")))
 
     def test_vorrang_einstellungen(self):
-        from rolliregie.einstellungen import Bereich
+        from openregie.einstellungen import Bereich
         z = zmod.ermitteln(Bereich("obs", {"port": 5000, "passwort": "eigen"}))
         self.assertEqual((z.port, z.passwort), (5000, "eigen"))
 

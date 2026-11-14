@@ -1,14 +1,14 @@
 """Das Hauptfenster im Regiepult-Look.
 
   ┌──────────────────────────────────────────────────────────────┐
-  │ Rolliregie            ● OBS verbunden              [ON AIR]  │  Kopfleiste
+  │ OpenRegie            ● OBS verbunden              [ON AIR]  │  Kopfleiste
   ├──────────────────────────────────────────────────────────────┤
   │ (Hinweis, wenn OBS nicht verbunden ist)  [OBS starten] [Neu] │  Meldungsleiste
   ├──────────┬──────────────────────────────┬────────────────────┤
   │ Titel    │  Live-Vorschau               │  Bedienfeld des    │
   │ ▸ Countd.│                              │  gewählten Titels  │
   ├──────────┴──────────────────────────────┴────────────────────┤
-  │ Rolliregie Build 1.0                                         │  Fußzeile
+  │ OpenRegie Build 1.0                                         │  Fußzeile
   └──────────────────────────────────────────────────────────────┘
 """
 
@@ -32,7 +32,7 @@ from .countdown_bereich import CountdownBereich
 from .stil import stylesheet
 from .titelliste import TitelListe
 
-log = logging.getLogger("rolliregie.fenster")
+log = logging.getLogger("openregie.fenster")
 
 
 class Hauptfenster(QMainWindow):

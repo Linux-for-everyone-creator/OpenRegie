@@ -1,7 +1,7 @@
 import threading
 import unittest
 
-from rolliregie.titel.countdown import Countdown, Zustand, als_text
+from openregie.titel.countdown import Countdown, Zustand, als_text
 
 
 class TestUhr:

@@ -1,9 +1,9 @@
 # =====================================================================
-#  Rolliregie – alle Einstellungen an einer Stelle
+#  OpenRegie – alle Einstellungen an einer Stelle
 # ---------------------------------------------------------------------
 #  Hier stehen alle Farben, Texte und Größen.
 #  Ändern: Wert rechts vom "=" anpassen, Datei speichern,
-#  Rolliregie neu starten.
+#  OpenRegie neu starten.
 #  Farben sind Hex-Codes, z. B. "#FF0000" = Rot.
 #  Texte immer in "Anführungszeichen".
 # =====================================================================
@@ -19,7 +19,7 @@ adresse = "localhost"
 port = 0
 # Leer lassen = Passwort automatisch aus den OBS-Einstellungen lesen.
 passwort = ""
-# Wie oft Rolliregie es neu versucht, wenn OBS nicht erreichbar ist (Sekunden).
+# Wie oft OpenRegie es neu versucht, wenn OBS nicht erreichbar ist (Sekunden).
 neu_verbinden_sekunden = 3
 # Befehl, mit dem der Knopf "OBS starten" OBS öffnet.
 startbefehl = "obs"
@@ -41,7 +41,7 @@ qualitaet = 75
 #  Countdown
 # ---------------------------------------------------------------------
 [countdown]
-# Dauer beim Start von Rolliregie (Sekunden). 300 = 5 Minuten.
+# Dauer beim Start von OpenRegie (Sekunden). 300 = 5 Minuten.
 startdauer_sekunden = 300
 # Schritte der Plus/Minus-Knöpfe (Sekunden).
 schritt_gross_sekunden = 60
@@ -49,8 +49,8 @@ schritt_klein_sekunden = 10
 # Längste mögliche Dauer (Sekunden). 5999 = 99:59.
 hoechstdauer_sekunden = 5999
 
-# Name der Browserquelle, die Rolliregie in OBS anlegt.
-obs_quellenname = "Rolliregie Countdown"
+# Name der Browserquelle, die OpenRegie in OBS anlegt.
+obs_quellenname = "OpenRegie Countdown"
 # Port der kleinen Countdown-Seite (nur auf diesem PC erreichbar).
 webseiten_port = 8787
 
@@ -142,9 +142,9 @@ fenster_hoehe = 900
 #  Texte im Regiepult
 # ---------------------------------------------------------------------
 [texte]
-programmname = "Rolliregie"
-untertitel = "Barrierefrei streamen"
-build_anzeige = "{programmname} Build {build}"
+programmname = "OpenRegie"
+untertitel = "Profi-Regie für alle. Einfach live."
+build_anzeige = "{programmname} · Vorabversion · Build {build}"
 
 status_verbunden = "OBS verbunden"
 status_verbinde = "Verbinde mit OBS …"
@@ -180,8 +180,8 @@ plus_minus_beschriftung = "Dauer einstellen"
 meldung_obs_nicht_offen = "OBS ist nicht geöffnet. Klicke auf „OBS starten“."
 meldung_websocket_aus = "OBS ist offen, aber die Fernsteuerung ist aus. In OBS: Werkzeuge → WebSocket-Servereinstellungen → „WebSocket-Server aktivieren“ einschalten."
 meldung_passwort_falsch = "OBS hat das Passwort abgelehnt. Bitte in einstellungen.toml bei [obs] das Passwort leer lassen oder das richtige eintragen."
-meldung_obs_zu_alt = "Diese OBS-Version ist zu alt für Rolliregie. Bitte OBS aktualisieren."
-meldung_verbindung_weg = "Die Verbindung zu OBS ist abgebrochen. Rolliregie versucht es gleich wieder."
+meldung_obs_zu_alt = "Diese OBS-Version ist zu alt für OpenRegie. Bitte OBS aktualisieren."
+meldung_verbindung_weg = "Die Verbindung zu OBS ist abgebrochen. OpenRegie versucht es gleich wieder."
 meldung_obs_startet = "OBS wird gestartet …"
 meldung_obs_start_fehler = "OBS ließ sich nicht starten."
 meldung_einrichten_ok = "Fertig! Der Countdown ist jetzt in der Szene „{szene}“."
@@ -189,4 +189,4 @@ meldung_einrichten_kein_browser = "In diesem OBS fehlt die Browserquelle. Der Co
 meldung_einrichten_fehler = "Das Einrichten hat nicht geklappt: {grund}"
 meldung_nicht_verbunden = "Das geht erst, wenn OBS verbunden ist."
 meldung_webseite_port_belegt = "Die Countdown-Seite konnte nicht starten, weil Port {port} schon benutzt wird. Bitte in einstellungen.toml bei [countdown] einen anderen webseiten_port eintragen."
-meldung_schon_offen = "Rolliregie ist schon geöffnet."
+meldung_schon_offen = "OpenRegie ist schon geöffnet."

@@ -1,10 +1,10 @@
-"""Grundbaustein für alle Rolliregie-Titel.
+"""Grundbaustein für alle OpenRegie-Titel.
 
-Ein Titel ist etwas, das Rolliregie im Stream anzeigt: Countdown, später Uhr,
+Ein Titel ist etwas, das OpenRegie im Stream anzeigt: Countdown, später Uhr,
 Bauchbinde, News-Ticker …  Jeder Titel hat einen „Antrieb“:
 
-  lokal – Rolliregie erzeugt die Grafik selbst (lokale Webseite als OBS-Browserquelle)
-  uno   – Overlays.uno erzeugt die Grafik, Rolliregie schickt nur Texte und
+  lokal – OpenRegie erzeugt die Grafik selbst (lokale Webseite als OBS-Browserquelle)
+  uno   – Overlays.uno erzeugt die Grafik, OpenRegie schickt nur Texte und
           Ein-/Ausblenden über die Uno-API (ab Build 1.1)
 """
 

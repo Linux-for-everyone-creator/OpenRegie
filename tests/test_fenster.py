@@ -5,13 +5,13 @@ import unittest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
-from rolliregie import einstellungen
-from rolliregie.obs.verbindung import ObsVerbindung, Sendung, Status
-from rolliregie.obs.vorschau import Vorschau
-from rolliregie.oberflaeche.countdown_bereich import schritt_text
-from rolliregie.oberflaeche.hauptfenster import Hauptfenster
-from rolliregie.titel.countdown import Countdown, Zustand
-from rolliregie.web.server import LokaleWebseite
+from openregie import einstellungen
+from openregie.obs.verbindung import ObsVerbindung, Sendung, Status
+from openregie.obs.vorschau import Vorschau
+from openregie.oberflaeche.countdown_bereich import schritt_text
+from openregie.oberflaeche.hauptfenster import Hauptfenster
+from openregie.titel.countdown import Countdown, Zustand
+from openregie.web.server import LokaleWebseite
 
 from .falsches_obs import FalschesObs
 from .hilfen import app, obs_einstellungen, warte, warte_bis, zugang
@@ -48,7 +48,7 @@ class FensterTest(unittest.TestCase):
         warte(20)
 
     def test_build_anzeige(self):
-        self.assertEqual(self.f.build.text(), "Rolliregie Build " + einstellungen.build_nummer())
+        self.assertEqual(self.f.build.text(), "OpenRegie · Vorabversion · Build " + einstellungen.build_nummer())
         self.assertTrue(self.f.build.isVisible())
 
     def test_titelliste(self):
@@ -152,7 +152,7 @@ class FensterTest(unittest.TestCase):
         self.assertFalse(self.b.einrichten.isEnabled())  # kein Doppelklick während es läuft
         self.assertTrue(warte_bis(lambda: self.b.einrichten.isEnabled()))
         self.assertIn("Fertig", self.b.meldung.text())
-        self.assertEqual(self.obs.quellen["Rolliregie Countdown"]["settings"]["url"], self.web.countdown_adresse)
+        self.assertEqual(self.obs.quellen["OpenRegie Countdown"]["settings"]["url"], self.web.countdown_adresse)
 
     def test_einrichten_ohne_verbindung(self):
         klick(self.b.einrichten)
@@ -208,7 +208,7 @@ class ObsStartenTest(unittest.TestCase):
         E2._werte["obs"] = dict(werte, startbefehl="true")
         f = Hauptfenster(E2, v, vs, cd, "http://x")
         f.show()
-        from rolliregie.obs import zugang as zmod
+        from openregie.obs import zugang as zmod
         alt = zmod.obs_laeuft
         zmod.obs_laeuft = lambda *a: False
         try:

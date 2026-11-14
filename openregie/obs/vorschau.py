@@ -14,7 +14,7 @@ from PySide6.QtGui import QImage
 
 from .verbindung import ObsVerbindung
 
-log = logging.getLogger("rolliregie.vorschau")
+log = logging.getLogger("openregie.vorschau")
 
 
 def bild_aus_daten(bilddaten: str) -> QImage | None:
