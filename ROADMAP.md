@@ -35,16 +35,18 @@ OpenRegie wird Open Source: keine Geheimnisse im Code, Zugangsdaten nur im Passw
 - [x] Rotes On-Air-Licht (aus Build 1.0)
 - [ ] Ein bis zwei Test-Streams durch Kevin
 - [x] Einzel-Unos (z. B. „Countdown | Circles“) einfügen – Korrektur nach erstem Test
-- [ ] Prüfung mit dem echten Overlays.uno-Konto (Antwortformat von Uno)
-- [ ] Einzel-Uno: Befehle mit echter Adresse klären (Zustand für Tally, Countdown Play/Reset und Dauer)
+- [ ] Prüfung mit einem echten Uno-Projekt mit mehreren Overlays (bisher nur Einzel-Uno echt geprüft)
+- [x] Einzel-Uno: Steuerung mit echter Adresse geklärt und eingebaut (Ein/Aus, Tally, Countdown, Dauer, Texte)
+- [x] Neues Aussehen nach dem Entwurf „Hauptfenster“ (Bibliothek mit Kacheln, Lampen, Live-Bild, Ausgewählt)
 - [ ] Twitch-App anlegen und Client-ID eintragen
 
 ### Build 1.2
+- [ ] Quellen aus OBS als Kacheln (wie im Entwurf unten)
 - [ ] OBS-Quellen als Vorschaubilder anzeigen und umbenennen
 - [ ] Overlays direkt bearbeiten: über den Knopf „Bearbeiten“ (einfacher Klick) und zusätzlich per Doppelklick in der Vorschau
 
 ### Build 1.7
-- [ ] Ordner für Overlays (Bibliothek)
+- [ ] Ordner für Overlays (Bibliothek) und Suche
 - [ ] Twitch-Kategorie ändern
 
 ## Später

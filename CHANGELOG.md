@@ -2,6 +2,47 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.1 – Einzel-Unos richtig steuern, neues Aussehen · 14.11.2026
+
+**Behoben**
+- Einzel-Unos (z. B. „Countdown | Circles“) ließen sich zwar einfügen, aber nicht ein- und ausblenden.
+  Mit dem echten Uno herausgefunden: Einzel-Unos verstehen über `…/api` keinen Befehl außer
+  „ShowOverlay“/„HideOverlay“ – und die zeigen nichts an. Gesteuert werden sie über die
+  Singular-Schnittstelle derselben Adresse (`…/control`, `…/model`).
+- Komplett sichtbar wird ein Einzel-Uno erst, wenn Hauptteil und alle Teile, die im Uno-Bauplan von
+  Haus aus an sind, auf „In“ gehen und das Häkchen „Active“ an ist (sonst nur Kreis ohne Zahlen).
+  Genau das macht OpenRegie jetzt mit einem Klick – beim Ausblenden alles zurück.
+- Beim Start war kein Overlay ausgewählt, solange die Liste noch lud.
+
+**Neu**
+- Einzel-Unos zeigen ihren echten Namen und ihr Vorschaubild aus Uno.
+- **Countdown steuern** (bei Uno-Overlays mit Zeitgeber): große Anzeige der Restzeit, die mitläuft,
+  Knöpfe Start, Pause, Zurück und Dauer −10 Min / −1 Min / +1 Min / +10 Min.
+- Textfelder von Einzel-Unos (z. B. „Message“ = Endtext des Countdowns) lassen sich ändern.
+- Tally-Licht auch bei Einzel-Unos, abgelesen aus Uno.
+- **Neues Aussehen nach dem Entwurf „Hauptfenster“:**
+  - Kopfleiste mit gelbem Logo, rundem OBS-Schild, rotem „● ON AIR“-Schild und Uhr.
+  - Links die **Bibliothek** mit Kacheln (Vorschau bzw. Countdown-Zeit). Der farbige Rahmen ist die
+    Lampe: rot = Live, grün = Bereit, grau = Aus – mit Erklärung „LAMPEN“ darunter.
+  - In der Mitte das **Live-Bild** mit rotem Rahmen, solange gesendet wird; darunter der Twitch-Titel.
+  - Rechts **AUSGEWÄHLT** mit Countdown, Texten und unten den großen Knöpfen
+    „▶ Einblenden“ (grün) und „■ Ausblenden“ (rot).
+  - Schriftart steht jetzt in `einstellungen.toml` (`[groessen] schriftart`).
+- Aus dem Entwurf bewusst noch nicht übernommen: Suche, Playlist, Akzentfarbe, „Ausblenden nach“,
+  Quellen aus OBS (Build 1.2) und Doppelklick (nur einfacher Klick).
+- `werkzeuge/test_mit_echtem_uno.py`: prüft OpenRegie gegen das echte Einzel-Uno.
+
+**Geändert**
+- Uno wird nur noch alle 20 Sekunden nach dem Zustand gefragt (Uno erlaubt 10.000 Anfragen am Tag).
+  Nach jedem eigenen Klick stimmt die Lampe sofort.
+
+**Geprüft**
+- 133 automatische Tests, mehrfach ohne Fehler. Das nachgeahmte Uno verhält sich wie das echte
+  (auch „Kreis ohne Zahlen“ ohne „Active“ und „ShowOverlay zeigt nichts“).
+- 19 von 19 Prüfungen mit dem **echten** „Countdown | Circles“: Einfügen, Name, Vorschaubild,
+  Ein-/Ausblenden komplett, Start/Pause/Zurück, Restzeit sekundengenau, Dauer ändern und zurück.
+  Danach war alles wieder wie vorher (ausgeblendet, 4:59:40).
+
 ## Build 1.1 – Korrektur: Einzel-Unos · 14.11.2026
 
 **Behoben**

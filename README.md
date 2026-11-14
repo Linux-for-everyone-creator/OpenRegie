@@ -17,6 +17,8 @@ Port und Passwort liest OpenRegie selbst. Welche Szenensammlung geladen wird, st
 2. In OpenRegie links auf **„Uno-Projekte“** und dann auf **„Aus Zwischenablage einfügen“** klicken.
 
 Die Adresse wird im Passwortspeicher des Systems gespeichert (KDE-Wallet bzw. Schlüsselbund).
+Es gehen beide Arten: Uno-Projekte mit mehreren Overlays und einzelne Unos (z. B. „Countdown | Circles“).
+Bei Overlays mit Zeitgeber erscheinen rechts die Countdown-Knöpfe (Start, Pause, Zurück, Dauer).
 Damit die Overlays im Stream zu sehen sind, muss die **Ausgabe-Adresse** (Output) des Uno-Projekts
 einmal als Browserquelle in OBS stehen.
 
@@ -35,6 +37,8 @@ Alle Farben, Texte und Größen stehen in **`einstellungen.toml`**. Nach dem Än
 ## Für Entwickler
 - Tests: `python3 -m unittest discover -s tests -t .`
 - Test mit echtem OBS (fasst die eigenen OBS-Einstellungen nicht an): `python3 werkzeuge/test_mit_echtem_obs.py`
+- Test mit echtem Uno (Adresse in `daten/geheim.toml`, blendet kurz ein!): `python3 werkzeuge/test_mit_echtem_uno.py --ja-schalten`
+- Nur lesen, welche Befehle ein Uno versteht: `python3 werkzeuge/uno_pruefen.py`
 - Build-Nummer: Datei `VERSION`
 - Pläne: `ROADMAP.md` · Änderungen: `CHANGELOG.md`
 - Protokoll für die Fehlersuche: `~/.local/state/openregie/openregie.log`
