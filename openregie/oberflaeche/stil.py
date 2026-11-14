@@ -32,13 +32,34 @@ def stylesheet(E) -> str:
     QLabel#gedimmt {{ color: {f.text_gedimmt}; font-size: {g.schrift_klein}px; }}
     QLabel#meldung {{ color: {f.text}; font-size: {g.schrift}px; }}
     QLabel#build {{ color: {f.build_text}; font-size: {g.schrift_klein}px; }}
-    QLabel#countdown_anzeige {{
-        font-size: {g.schrift_countdown}px; font-weight: 800;
-        background-color: {f.hintergrund};
-        border: 2px solid {f.rahmen}; border-radius: {g.knopf_rundung}px;
-        padding: 4px 12px;
+    QLabel#gut {{ color: {f.meldung_gut}; font-size: {g.schrift}px; }}
+    QLabel#fehler {{ color: {f.meldung_fehler}; font-size: {g.schrift}px; }}
+    QLabel#feldname {{ color: {f.text_gedimmt}; font-size: {g.schrift_klein}px; }}
+    QLabel#tally_text {{ font-size: {g.schrift_titel}px; font-weight: 900; letter-spacing: 2px; }}
+    QLabel#hinweis_gross {{ color: {f.text_gedimmt}; font-size: {g.schrift}px; }}
+
+    /* Eingabefelder: groß und gut lesbar */
+    QLineEdit {{
+        background-color: {f.eingabe_hintergrund};
+        color: {f.text};
+        border: 2px solid {f.rahmen};
+        border-radius: {g.knopf_rundung}px;
+        min-height: {g.eingabe_hoehe}px;
+        padding: 0px 12px;
+        font-size: {g.schrift_eingabe}px;
+        selection-background-color: {f.auswahl};
     }}
-    QLabel#countdown_zustand {{ font-size: {g.schrift}px; color: {f.text_gedimmt}; }}
+    QLineEdit:hover {{ border-color: {f.knopf_hover_rahmen}; }}
+    QLineEdit:focus {{ border-color: {f.knopf_fokus_rahmen}; }}
+
+    QScrollArea {{ border: none; }}
+    QScrollBar:vertical {{
+        background: {f.flaeche}; width: 28px; margin: 0px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {f.knopf_hover}; min-height: 60px; border-radius: 10px;
+    }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
 
     /* Knöpfe: groß, deutlicher Rahmen, wenn der Zeiger darüber ist */
     QPushButton {{
@@ -65,28 +86,28 @@ def stylesheet(E) -> str:
         color: {f.knopf_aus_text};
         border-color: {f.knopf_aus};
     }}
-    QPushButton#start {{ background-color: {f.start}; }}
-    QPushButton#pause {{ background-color: {f.pause}; }}
-    QPushButton#stopp {{ background-color: {f.stopp}; }}
-    QPushButton#start:focus, QPushButton#pause:focus, QPushButton#stopp:focus {{
+    QPushButton#einblenden {{ background-color: {f.einblenden}; }}
+    QPushButton#ausblenden {{ background-color: {f.ausblenden}; }}
+    QPushButton#twitch {{ background-color: {f.twitch}; }}
+    QPushButton#einblenden:focus, QPushButton#ausblenden:focus, QPushButton#twitch:focus {{
         border-color: {f.knopf_fokus_rahmen};
     }}
-    QPushButton#start:hover, QPushButton#pause:hover, QPushButton#stopp:hover {{
+    QPushButton#einblenden:hover, QPushButton#ausblenden:hover, QPushButton#twitch:hover {{
         border-color: {f.knopf_hover_rahmen};
     }}
-    QPushButton#start:disabled, QPushButton#pause:disabled, QPushButton#stopp:disabled {{
+    QPushButton#einblenden:disabled, QPushButton#ausblenden:disabled, QPushButton#twitch:disabled {{
         background-color: {f.knopf_aus}; color: {f.knopf_aus_text}; border-color: {f.knopf_aus};
     }}
 
-    /* Titelliste */
-    QPushButton#titel {{
-        text-align: left; padding-left: 20px;
-        min-height: {g.titelliste_zeilenhoehe}px;
+    /* Overlay-Liste */
+    QPushButton#overlay {{
+        text-align: left; padding-left: 16px;
+        min-height: {g.overlay_zeilenhoehe}px;
     }}
-    QPushButton#titel:checked {{
+    QPushButton#overlay:checked {{
         background-color: {f.auswahl};
         border-color: {f.auswahl};
     }}
-    QPushButton#titel:checked:focus {{ border-color: {f.knopf_fokus_rahmen}; }}
-    QPushButton#titel:checked:hover {{ border-color: {f.knopf_hover_rahmen}; }}
+    QPushButton#overlay:checked:focus {{ border-color: {f.knopf_fokus_rahmen}; }}
+    QPushButton#overlay:checked:hover {{ border-color: {f.knopf_hover_rahmen}; }}
     """

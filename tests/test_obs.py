@@ -4,7 +4,6 @@ import unittest
 from PySide6.QtNetwork import QHostAddress
 
 from openregie.obs import verbindung as vmod
-from openregie.obs.einrichten import CountdownEinrichten
 from openregie.obs.verbindung import EREIGNISSE_AUSGABEN, ObsVerbindung, Sendung, Status, ZEITLIMIT_TEXT
 from openregie.obs.vorschau import Vorschau, bild_aus_daten
 from openregie.obs import zugang as zmod
@@ -335,82 +334,6 @@ class VorschauTest(Grundlage):
         self.assertIsNotNone(bild_aus_daten(testbild_daten()))
         self.assertIsNone(bild_aus_daten(""))
         self.assertIsNone(bild_aus_daten("data:image/jpg;base64,kaputt!!"))
-
-
-class EinrichtenTest(Grundlage):
-    ADRESSE = "http://127.0.0.1:8787/countdown"
-    NAME = "OpenRegie Countdown"
-
-    def einrichten(self):
-        ergebnis = []
-        CountdownEinrichten(self.v, self.NAME, self.ADRESSE, self.E.texte,
-                            lambda ok, m: ergebnis.append((ok, m))).los()
-        self.assertTrue(warte_bis(lambda: ergebnis, 3000))
-        warte(50)
-        self.assertEqual(len(ergebnis), 1)
-        return ergebnis[0]
-
-    def test_neu_anlegen(self):
-        self.verbinden()
-        ok, meldung = self.einrichten()
-        self.assertTrue(ok, meldung)
-        self.assertIn("Szene 1", meldung)
-        q = self.obs.quellen[self.NAME]
-        self.assertEqual(q["kind"], "browser_source")
-        self.assertEqual(q["settings"]["url"], self.ADRESSE)
-        self.assertEqual((q["settings"]["width"], q["settings"]["height"]), (1280, 720))
-        self.assertEqual([n for _, n, _ in self.obs.szenen["Szene 1"]], [self.NAME])
-        t = list(self.obs.transform.values())[0]
-        self.assertEqual((t["positionX"], t["positionY"], t["scaleX"]), (0.0, 0.0, 1.0))
-
-    def test_zweimal_kein_doppel(self):
-        self.verbinden()
-        self.assertTrue(self.einrichten()[0])
-        self.obs.szenen["Szene 1"][0] = (1, self.NAME, False)  # ausgeblendet
-        ok, meldung = self.einrichten()
-        self.assertTrue(ok, meldung)
-        self.assertEqual(len(self.obs.quellen), 1)
-        self.assertEqual(self.obs.szenen["Szene 1"], [(1, self.NAME, True)])  # wieder eingeblendet
-        self.assertIn("PressInputPropertiesButton", [t for t, _ in self.obs.anfragen])
-
-    def test_andere_szene(self):
-        self.verbinden()
-        self.einrichten()
-        self.obs.szene_wechseln("Pause")
-        self.assertTrue(warte_bis(lambda: self.v.szene == "Pause"))
-        ok, meldung = self.einrichten()
-        self.assertTrue(ok, meldung)
-        self.assertIn("Pause", meldung)
-        self.assertEqual([n for _, n, _ in self.obs.szenen["Pause"]], [self.NAME])
-        self.assertEqual(len(self.obs.quellen), 1)
-
-    def test_ohne_browserquelle(self):
-        self.obs.arten = ["image_source"]
-        self.verbinden()
-        self.assertEqual(self.einrichten(), (False, self.E.texte.meldung_einrichten_kein_browser))
-        self.assertEqual(self.obs.quellen, {})
-
-    def test_name_schon_vergeben(self):
-        self.obs.quellen[self.NAME] = {"kind": "image_source", "settings": {}}
-        self.verbinden()
-        ok, meldung = self.einrichten()
-        self.assertFalse(ok)
-        self.assertIn("andere Quelle", meldung)
-
-    def test_nicht_verbunden(self):
-        self.assertEqual(self.einrichten(), (False, self.E.texte.meldung_nicht_verbunden))
-
-    def test_abbruch_mittendrin(self):
-        self.verbinden()
-        self.obs.antworte = False
-        ergebnis = []
-        CountdownEinrichten(self.v, self.NAME, self.ADRESSE, self.E.texte,
-                            lambda ok, m: ergebnis.append((ok, m))).los()
-        warte(50)
-        self.obs.alle_trennen()
-        self.assertTrue(warte_bis(lambda: ergebnis))
-        self.assertFalse(ergebnis[0][0])
-        self.assertNotIn("{", ergebnis[0][1])
 
 
 class ZugangTest(unittest.TestCase):

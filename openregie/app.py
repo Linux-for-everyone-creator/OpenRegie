@@ -1,4 +1,9 @@
-"""Programmstart von OpenRegie."""
+"""Programmstart von OpenRegie.
+
+Ablauf: Ladebildschirm zeigen → OBS unsichtbar starten (oder das laufende nehmen)
+→ verbinden, Szenensammlung prüfen → Regiepult öffnen. Uno-Overlays und
+Twitch-Anmeldung werden aus dem Passwortspeicher geladen.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +22,9 @@ from . import einstellungen
 from .einstellungen import PROJEKT_ORDNER, EinstellungsFehler
 
 SYMBOL = PROJEKT_ORDNER / "daten" / "openregie.svg"
+# Höchstens so lange bleibt der Ladebildschirm stehen, auch wenn OBS noch nicht bereit ist.
+STARTBILD_HOECHSTENS_MS = 20000
+STARTBILD_FERTIG_MS = 600  # „Alles bereit!“ kurz zeigen
 
 
 def protokoll_einrichten() -> Path:
@@ -69,37 +77,38 @@ def main() -> int:
         hinweis("OpenRegie", E.texte.meldung_schon_offen)
         return 0
 
+    from .geheimspeicher import Geheimspeicher
+    from .obs.motor import MotorZustand, ObsMotor
     from .obs.verbindung import ObsVerbindung
     from .obs.vorschau import Vorschau
     from .oberflaeche.hauptfenster import Hauptfenster
-    from .titel.countdown import Countdown
-    from .web.server import LokaleWebseite
+    from .oberflaeche.startbild import Startbild
+    from .twitch.konto import TwitchKonto
+    from .uno.verwaltung import UnoVerwaltung
 
     try:
-        countdown = Countdown(E.texte.countdown_titelname, int(E.countdown.startdauer_sekunden),
-                              int(E.countdown.hoechstdauer_sekunden))
+        startbild = Startbild(E, SYMBOL)
+        startbild.text_setzen(E.texte.start_obs)
+        startbild.show()
+        app.processEvents()
 
-        webseite = LokaleWebseite(int(E.countdown.webseiten_port), countdown, E.countdown)
-        start_meldung, adresse = "", None
-        try:
-            webseite.starten()
-            adresse = webseite.countdown_adresse
-            log.info("Countdown-Seite: %s", adresse)
-        except OSError as fehler:
-            log.error("Countdown-Seite startet nicht: %s", fehler)
-            start_meldung = E.texte.meldung_webseite_port_belegt.format(port=E.countdown.webseiten_port)
-
+        speicher = Geheimspeicher()
         verbindung = ObsVerbindung(E.obs, E.texte)
+        motor = ObsMotor(E.obs, E.texte, verbindung)
         vorschau = Vorschau(verbindung, E.vorschau)
-        fenster = Hauptfenster(E, verbindung, vorschau, countdown, adresse, start_meldung)
+        uno = UnoVerwaltung(E.uno, E.texte, speicher)
+        twitch = TwitchKonto(E.twitch, E.texte, speicher)
+        fenster = Hauptfenster(E, verbindung, vorschau, motor, uno, twitch)
     except EinstellungsFehler as fehler:
         hinweis("OpenRegie", str(fehler))
         return 1
 
     def aufraeumen():
         vorschau.anhalten()
+        uno.beenden()
+        twitch.beenden()
         verbindung.beenden()
-        webseite.beenden()
+        motor.beenden()  # das selbst gestartete OBS mit beenden
         sperre.unlock()
         log.info("OpenRegie beendet")
 
@@ -113,9 +122,34 @@ def main() -> int:
     wach.start(500)
     wach.timeout.connect(lambda: None)
 
-    if bool(E.groessen.fenster_maximiert):
-        fenster.showMaximized()
-    else:
-        fenster.show()
-    verbindung.starten()
+    # --- Ladebildschirm, bis OBS bereit ist (oder etwas schiefgeht) ------------
+    def fenster_zeigen():
+        if not startbild.isVisible():
+            return
+        # erst das Regiepult zeigen, dann den Ladebildschirm schließen
+        # (sonst denkt Qt kurz, das letzte Fenster sei zu, und beendet sich)
+        if bool(E.groessen.fenster_maximiert):
+            fenster.showMaximized()
+        else:
+            fenster.show()
+        startbild.close()
+
+    def motor_meldet(zustand, _meldung):
+        if zustand is MotorZustand.FEHLER:
+            fenster_zeigen()  # das Regiepult zeigt die Meldung und die Knöpfe
+
+    def verbindung_meldet(status, _meldung):
+        if verbindung.verbunden:
+            startbild.text_setzen(E.texte.start_fertig)
+            QTimer.singleShot(STARTBILD_FERTIG_MS, fenster_zeigen)
+        elif motor.zustand is not MotorZustand.STARTET:
+            startbild.text_setzen(E.texte.start_verbinde)
+
+    motor.zustand_geaendert.connect(motor_meldet)
+    verbindung.status_geaendert.connect(verbindung_meldet)
+    QTimer.singleShot(STARTBILD_HOECHSTENS_MS, fenster_zeigen)
+
+    uno.laden()
+    twitch.laden()
+    motor.starten()
     return app.exec()

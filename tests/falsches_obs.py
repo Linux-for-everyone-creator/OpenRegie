@@ -54,6 +54,8 @@ class FalschesObs(QObject):
         self.naechste_id = 1
         self.transform: dict[int, dict] = {}
         self.bild = testbild_daten()
+        self.sammlung = "Unbenannt"
+        self.sammlungen = ["Unbenannt", "Show"]
 
     # ------------------------------------------------------------------
     def _neu(self):
@@ -110,6 +112,16 @@ class FalschesObs(QObject):
             if d.get("sourceName") not in self.szenen:
                 return (False, 600, "No source was found by the name of `x`.", None)
             return (*OK, {"imageData": self.bild})
+        if typ == "GetSceneCollectionList":
+            return (*OK, {"currentSceneCollectionName": self.sammlung, "sceneCollections": list(self.sammlungen)})
+        if typ == "SetCurrentSceneCollection":
+            if d.get("sceneCollectionName") not in self.sammlungen:
+                return (False, 600, "No scene collection", None)
+            self.sammlung = d["sceneCollectionName"]
+            return (*OK, None)
+        if typ == "StopStream":
+            self.stream_stoppen()
+            return (*OK, None)
         if typ == "GetInputKindList":
             return (*OK, {"inputKinds": list(self.arten)})
         if typ == "GetVideoSettings":

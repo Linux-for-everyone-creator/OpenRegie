@@ -6,11 +6,13 @@
 #  OpenRegie neu starten.
 #  Farben sind Hex-Codes, z. B. "#FF0000" = Rot.
 #  Texte immer in "Anführungszeichen".
+#  Zugangsdaten (Uno, Twitch) stehen NICHT hier, sondern sicher im
+#  Passwortspeicher des Systems.
 # =====================================================================
 
 
 # ---------------------------------------------------------------------
-#  Verbindung zu OBS
+#  OBS (läuft unsichtbar im Hintergrund)
 # ---------------------------------------------------------------------
 [obs]
 # Adresse von OBS. "localhost" heißt: OBS läuft auf diesem PC.
@@ -21,8 +23,16 @@ port = 0
 passwort = ""
 # Wie oft OpenRegie es neu versucht, wenn OBS nicht erreichbar ist (Sekunden).
 neu_verbinden_sekunden = 3
-# Befehl, mit dem der Knopf "OBS starten" OBS öffnet.
+# Befehl, mit dem OpenRegie OBS startet.
 startbefehl = "obs"
+# true = OBS ohne sichtbares Fenster starten (nur ein Symbol in der Taskleiste).
+unsichtbar = true
+# Diese Szenensammlung soll in OBS geladen sein. Leer = nichts umschalten.
+szenensammlung = "Unbenannt"
+# So lange darf OBS zum Starten brauchen, bevor eine Meldung kommt (Sekunden).
+start_zeitlimit_sekunden = 30
+# true = Beim Schließen von OpenRegie auch das OBS beenden, das OpenRegie gestartet hat.
+beim_beenden_schliessen = true
 
 
 # ---------------------------------------------------------------------
@@ -38,38 +48,25 @@ qualitaet = 75
 
 
 # ---------------------------------------------------------------------
-#  Countdown
+#  Overlays.uno (alle Grafiken im Stream kommen von dort)
 # ---------------------------------------------------------------------
-[countdown]
-# Dauer beim Start von OpenRegie (Sekunden). 300 = 5 Minuten.
-startdauer_sekunden = 300
-# Schritte der Plus/Minus-Knöpfe (Sekunden).
-schritt_gross_sekunden = 60
-schritt_klein_sekunden = 10
-# Längste mögliche Dauer (Sekunden). 5999 = 99:59.
-hoechstdauer_sekunden = 5999
+[uno]
+# Adresse des Uno-Servers. Nur ändern, wenn Uno umzieht.
+basisadresse = "https://app.overlays.uno"
+# Wie oft OpenRegie bei Uno nachschaut, welche Overlays gerade sichtbar sind (Sekunden).
+abfrage_sekunden = 5
 
-# Name der Browserquelle, die OpenRegie in OBS anlegt.
-obs_quellenname = "OpenRegie Countdown"
-# Port der kleinen Countdown-Seite (nur auf diesem PC erreichbar).
-webseiten_port = 8787
 
-# Aussehen im Stream:
-# Position: "oben links", "oben mitte", "oben rechts",
-#           "mitte links", "mitte", "mitte rechts",
-#           "unten links", "unten mitte", "unten rechts"
-position = "mitte"
-# Abstand zum Bildrand in Pixeln.
-randabstand = 60
-schriftart = "Noto Sans"
-schriftgroesse = 160
-textfarbe = "#FFFFFF"
-hintergrundfarbe = "#000000"
-# Deckkraft des Hintergrunds: 0 = durchsichtig, 1 = voll.
-hintergrund_deckkraft = 0.55
-# Text, wenn der Countdown abgelaufen ist. Leer = "00:00" bleibt stehen.
-endtext = "Gleich geht's los!"
-endtext_schriftgroesse = 110
+# ---------------------------------------------------------------------
+#  Twitch
+# ---------------------------------------------------------------------
+[twitch]
+# Öffentliche Client-ID der OpenRegie-App bei Twitch (dev.twitch.tv → Anwendungen,
+# Typ „Öffentlich“). Sie ist kein Geheimnis. Leer = Twitch-Bereich ist aus.
+client_id = ""
+# Adressen von Twitch. Nur ändern, wenn Twitch umzieht.
+anmelde_adresse = "https://id.twitch.tv"
+api_adresse = "https://api.twitch.tv/helix"
 
 
 # ---------------------------------------------------------------------
@@ -94,9 +91,11 @@ knopf_gedrueckt = "#5A6578"
 knopf_aus = "#24282F"
 knopf_aus_text = "#5C6370"
 
-start = "#1F8A4C"
-pause = "#C98A12"
-stopp = "#B3261E"
+# Knopf „Einblenden“ und „Ausblenden“
+einblenden = "#1F8A4C"
+ausblenden = "#B3261E"
+# Knopf „Mit Twitch anmelden“
+twitch = "#7A3FE0"
 
 status_verbunden = "#2ECC71"
 status_verbinde = "#F1C40F"
@@ -108,8 +107,17 @@ on_air_aus = "#3A1414"
 on_air_aus_text = "#7A4A4A"
 on_air_startet = "#C0611B"
 
+# Tally-Licht pro Overlay
+tally_an = "#FF1E1E"
+tally_aus = "#3A3F4B"
+tally_unbekannt = "#6B7385"
+
+eingabe_hintergrund = "#0F1115"
 auswahl = "#2D6CDF"
-build_text = "#6B7385"
+meldung_gut = "#2ECC71"
+meldung_fehler = "#FF6B5E"
+# Build-Anzeige unten links (Wasserzeichen wie bei Windows-Vorabversionen)
+build_text = "#FFFFFF"
 
 
 # ---------------------------------------------------------------------
@@ -119,18 +127,26 @@ build_text = "#6B7385"
 schrift = 20
 schrift_klein = 16
 schrift_titel = 30
-schrift_countdown = 96
+schrift_eingabe = 22
 knopf_hoehe = 72
 knopf_breite_min = 110
 knopf_rundung = 12
 rahmen_dick = 4
 abstand = 16
 lampe = 36
+tally = 30
 on_air_breite = 260
 on_air_hoehe = 72
-titelliste_breite = 280
-titelliste_zeilenhoehe = 64
+overlayliste_breite = 470
+overlay_zeilenhoehe = 72
 seitenleiste_breite = 520
+eingabe_hoehe = 64
+# Deckkraft der Build-Anzeige: 0 = unsichtbar, 1 = voll.
+build_deckkraft = 0.35
+# Ladebildschirm
+start_breite = 760
+start_hoehe = 420
+start_schrift_name = 72
 # Beim Start das ganze Bild ausfüllen? true = ja, false = nein
 fenster_maximiert = true
 # Fenstergröße, wenn nicht maximiert
@@ -158,35 +174,91 @@ on_air_stoppt = "STOPPT …"
 knopf_obs_starten = "OBS starten"
 knopf_verbinden = "Neu verbinden"
 
-titelliste_ueberschrift = "Titel"
 vorschau_ueberschrift = "Live-Vorschau"
 vorschau_keine_verbindung = "Keine Vorschau.\nOBS ist nicht verbunden."
 vorschau_wartet = "Vorschau wird geladen …"
 
-countdown_ueberschrift = "Countdown"
-countdown_titelname = "Countdown"
-knopf_start = "Start"
-knopf_weiter = "Weiter"
-knopf_pause = "Pause"
-knopf_stopp = "Stopp"
-knopf_einrichten = "Countdown in OBS einrichten"
-countdown_zustand_bereit = "Bereit"
-countdown_zustand_laeuft = "Läuft"
-countdown_zustand_pausiert = "Pausiert"
-countdown_zustand_abgelaufen = "Abgelaufen"
-plus_minus_beschriftung = "Dauer einstellen"
+# Ladebildschirm
+start_obs = "OBS wird im Hintergrund gestartet …"
+start_verbinde = "Verbinde mit OBS …"
+start_fertig = "Alles bereit!"
+
+# Overlays
+overlays_ueberschrift = "Overlays"
+overlays_leer = "Noch keine Overlays.\nFüge rechts dein Uno-Projekt hinzu."
+knopf_ein = "Ein"
+knopf_aus = "Aus"
+knopf_einblenden = "Einblenden"
+knopf_ausblenden = "Ausblenden"
+knopf_liste_neu = "Liste neu laden"
+knopf_uno_einrichten = "Uno-Projekte"
+overlay_im_stream = "IM STREAM"
+overlay_ausgeblendet = "Ausgeblendet"
+overlay_unbekannt = "Zustand unbekannt"
+overlay_texte = "Texte"
+overlay_keine_texte = "Dieses Overlay hat keine Texte zum Ändern."
+overlay_texte_laden = "Texte werden geladen …"
+knopf_texte_uebernehmen = "Texte übernehmen"
+knopf_texte_neu = "Texte neu laden"
+meldung_texte_ok = "Fertig! Die Texte sind im Overlay."
+meldung_texte_nichts = "Es wurde nichts geändert."
+
+# Uno-Projekte einrichten
+uno_ueberschrift = "Uno-Projekte"
+uno_erklaerung = "So kommt ein Uno-Projekt in OpenRegie:\n1. In Overlays.uno das Projekt öffnen.\n2. Oben rechts im Menü „API Description“ wählen.\n3. Die Adresse kopieren.\n4. Hier auf „Aus Zwischenablage einfügen“ klicken."
+uno_projekt_name = "Uno-Projekt {nummer}"
+knopf_uno_einfuegen = "Aus Zwischenablage einfügen"
+knopf_uno_entfernen = "Entfernen"
+knopf_uno_wirklich = "Wirklich entfernen?"
+knopf_zurueck = "Zurück"
+uno_keine_projekte = "Noch kein Uno-Projekt eingefügt."
+meldung_uno_projekt_ok = "Fertig! {anzahl} Overlay(s) gefunden."
+meldung_uno_adresse_falsch = "In der Zwischenablage ist keine Uno-Adresse. Bitte in Uno die Adresse unter „API Description“ kopieren."
+meldung_uno_schon_da = "Dieses Uno-Projekt ist schon eingefügt."
+meldung_uno_adresse_unbekannt = "Uno kennt diese Adresse nicht. Bitte in Uno die Adresse unter „API Description“ neu kopieren."
+meldung_uno_kein_internet = "Overlays.uno ist gerade nicht erreichbar. Ist das Internet da?"
+meldung_uno_fehler = "Overlays.uno hat den Befehl nicht angenommen. Bitte gleich noch einmal versuchen."
+meldung_speicher_fehler = "Der Passwortspeicher des Systems ist nicht erreichbar. Zugangsdaten können gerade nicht gespeichert werden."
+
+# Twitch
+twitch_ueberschrift = "Twitch-Streamtitel"
+twitch_nicht_eingerichtet = "Twitch ist noch nicht eingerichtet (Client-ID fehlt in einstellungen.toml)."
+twitch_abgemeldet = "Nicht bei Twitch angemeldet."
+twitch_angemeldet = "Angemeldet als {name}"
+twitch_wartet = "Dein Code: {code}\nDie Twitch-Seite ist im Browser offen. Dort auf „Autorisieren“ klicken."
+knopf_twitch_anmelden = "Mit Twitch anmelden"
+knopf_twitch_abmelden = "Abmelden"
+knopf_twitch_seite = "Twitch-Seite öffnen"
+knopf_abbrechen = "Abbrechen"
+knopf_titel_uebernehmen = "Titel ändern"
+meldung_twitch_angemeldet = "Fertig! Du bist als {name} angemeldet."
+meldung_twitch_titel_ok = "Fertig! Der neue Titel ist auf Twitch."
+meldung_twitch_titel_leer = "Der Titel ist leer."
+meldung_twitch_titel_zu_lang = "Der Titel ist zu lang. Twitch erlaubt höchstens {anzahl} Zeichen."
+meldung_twitch_titel_fehler = "Twitch hat den Titel nicht angenommen. Bitte gleich noch einmal versuchen."
+meldung_twitch_kein_internet = "Twitch ist gerade nicht erreichbar. Ist das Internet da?"
+meldung_twitch_code_abgelaufen = "Der Code ist abgelaufen. Bitte noch einmal auf „Mit Twitch anmelden“ klicken."
+meldung_twitch_abgelehnt = "Die Anmeldung wurde nicht bestätigt. Bitte noch einmal versuchen."
+meldung_twitch_neu_anmelden = "Die Twitch-Anmeldung ist abgelaufen. Bitte neu anmelden."
+meldung_twitch_client_id_falsch = "Twitch kennt die Client-ID nicht. Bitte in einstellungen.toml bei [twitch] prüfen."
+
+# Beenden
+frage_beenden_live_titel = "Du bist live"
+frage_beenden_live = "Du bist gerade live. Wenn du OpenRegie schließt, wird auch der Stream beendet.\n\nWirklich beenden?"
+knopf_beenden_ja = "Stream beenden und schließen"
+knopf_beenden_nein = "Weiter streamen"
 
 # Meldungen (verständlich, ohne Fachsprache)
-meldung_obs_nicht_offen = "OBS ist nicht geöffnet. Klicke auf „OBS starten“."
+meldung_obs_nicht_offen = "OBS läuft nicht. Klicke auf „OBS starten“."
 meldung_websocket_aus = "OBS ist offen, aber die Fernsteuerung ist aus. In OBS: Werkzeuge → WebSocket-Servereinstellungen → „WebSocket-Server aktivieren“ einschalten."
 meldung_passwort_falsch = "OBS hat das Passwort abgelehnt. Bitte in einstellungen.toml bei [obs] das Passwort leer lassen oder das richtige eintragen."
 meldung_obs_zu_alt = "Diese OBS-Version ist zu alt für OpenRegie. Bitte OBS aktualisieren."
 meldung_verbindung_weg = "Die Verbindung zu OBS ist abgebrochen. OpenRegie versucht es gleich wieder."
-meldung_obs_startet = "OBS wird gestartet …"
-meldung_obs_start_fehler = "OBS ließ sich nicht starten."
-meldung_einrichten_ok = "Fertig! Der Countdown ist jetzt in der Szene „{szene}“."
-meldung_einrichten_kein_browser = "In diesem OBS fehlt die Browserquelle. Der Countdown kann so nicht angezeigt werden."
-meldung_einrichten_fehler = "Das Einrichten hat nicht geklappt: {grund}"
+meldung_obs_startet = "OBS wird im Hintergrund gestartet …"
+meldung_obs_start_fehler = "OBS ließ sich nicht starten. Ist OBS installiert? (einstellungen.toml, [obs] startbefehl)"
+meldung_obs_start_zu_langsam = "OBS ist gestartet, meldet sich aber nicht. Klicke auf „Neu verbinden“."
+meldung_obs_abgestuerzt = "OBS wurde unerwartet beendet. Klicke auf „OBS starten“."
+meldung_sammlung_fehlt = "In OBS gibt es die Szenensammlung „{name}“ nicht. Bitte in einstellungen.toml bei [obs] szenensammlung prüfen."
+meldung_sammlung_fehler = "OBS konnte die Szenensammlung nicht wechseln."
 meldung_nicht_verbunden = "Das geht erst, wenn OBS verbunden ist."
-meldung_webseite_port_belegt = "Die Countdown-Seite konnte nicht starten, weil Port {port} schon benutzt wird. Bitte in einstellungen.toml bei [countdown] einen anderen webseiten_port eintragen."
 meldung_schon_offen = "OpenRegie ist schon geöffnet."

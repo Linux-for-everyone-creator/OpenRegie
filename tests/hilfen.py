@@ -36,3 +36,15 @@ def obs_einstellungen(**aenderungen):
 
 def zugang(port, passwort="geheim"):
     return lambda: Zugang(port=port, passwort=passwort, passwort_noetig=True, server_an=True)
+
+
+def internet_einstellungen(netz, **twitch_aenderungen):
+    """Einstellungen, die auf das nachgeahmte Uno/Twitch zeigen."""
+    E = einstellungen.lade()
+    uno = dict(E.uno.als_dict(), basisadresse=netz.adresse, abfrage_sekunden=1)
+    twitch = dict(E.twitch.als_dict(), client_id=netz.client_id, anmelde_adresse=netz.adresse,
+                  api_adresse=netz.adresse + "/helix")
+    twitch.update(twitch_aenderungen)
+    E._werte["uno"] = uno
+    E._werte["twitch"] = twitch
+    return E

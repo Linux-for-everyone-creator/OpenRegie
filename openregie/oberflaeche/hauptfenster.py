@@ -1,50 +1,55 @@
 """Das Hauptfenster im Regiepult-Look.
 
-  ┌──────────────────────────────────────────────────────────────┐
-  │ OpenRegie            ● OBS verbunden              [ON AIR]  │  Kopfleiste
-  ├──────────────────────────────────────────────────────────────┤
-  │ (Hinweis, wenn OBS nicht verbunden ist)  [OBS starten] [Neu] │  Meldungsleiste
-  ├──────────┬──────────────────────────────┬────────────────────┤
-  │ Titel    │  Live-Vorschau               │  Bedienfeld des    │
-  │ ▸ Countd.│                              │  gewählten Titels  │
-  ├──────────┴──────────────────────────────┴────────────────────┤
-  │ OpenRegie Build 1.0                                         │  Fußzeile
-  └──────────────────────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────────────────┐
+  │ OpenRegie              ● OBS verbunden                  [ON AIR] │  Kopfleiste
+  ├──────────────────────────────────────────────────────────────────┤
+  │ (Hinweis, wenn mit OBS etwas nicht stimmt) [OBS starten] [Neu]   │  Meldungsleiste
+  ├─────────────┬─────────────────────────────┬──────────────────────┤
+  │ Overlays    │  Live-Vorschau              │  Bedienfeld des      │
+  │ ● Bauchb [Ein]                            │  gewählten Overlays  │
+  │ ● Ticker [Aus]──────────────────────────  │  (oder Uno-Projekte) │
+  │             │  Twitch-Streamtitel         │                      │
+  └─────────────┴─────────────────────────────┴──────────────────────┘
+   OpenRegie · Vorabversion · Build 1.1   ← Wasserzeichen unten links
 """
 
 from __future__ import annotations
 
 import logging
-import shlex
 
-from PySide6.QtCore import QProcess, Qt, QTimer
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QSizePolicy, QStackedWidget, QVBoxLayout,
-                               QWidget)
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+                               QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
 from .. import einstellungen
-from ..obs import zugang
-from ..obs.einrichten import CountdownEinrichten
-from ..obs.verbindung import ObsVerbindung, Status
+from ..obs.motor import MotorZustand, ObsMotor
+from ..obs.verbindung import ObsVerbindung, Sendung, Status
 from ..obs.vorschau import Vorschau
-from ..titel.countdown import Countdown
+from ..twitch.konto import TwitchKonto
+from ..uno.verwaltung import UnoVerwaltung
 from .bausteine import OnAirLicht, VerbindungsAnzeige, VorschauBild, beschriftung, flaeche, knopf
-from .countdown_bereich import CountdownBereich
+from .overlay_bereich import OverlayBedienfeld, OverlayListe, UnoEinrichtung, meldung
 from .stil import stylesheet
-from .titelliste import TitelListe
+from .twitch_bereich import TwitchBereich
 
 log = logging.getLogger("openregie.fenster")
 
+STREAM_STOPP_WARTEN_MS = 15000
+
 
 class Hauptfenster(QMainWindow):
-    def __init__(self, E, verbindung: ObsVerbindung, vorschau: Vorschau, countdown: Countdown,
-                 countdown_adresse: str | None, start_meldung: str = ""):
+    def __init__(self, E, verbindung: ObsVerbindung, vorschau: Vorschau, motor: ObsMotor,
+                 uno: UnoVerwaltung, twitch: TwitchKonto):
         super().__init__()
         self.E = E
         self.verbindung = verbindung
         self.vorschau = vorschau
-        self.countdown = countdown
-        self.countdown_adresse = countdown_adresse
-        self._einrichten_laeuft = None
+        self.motor = motor
+        self.uno = uno
+        self.twitch = twitch
+        self._sammlung_text = ""
+        self._schliessen_erlaubt = False
+        self._stoppt_fuer_ende = False
         t, g = E.texte, E.groessen
 
         self.setWindowTitle(f"{t.programmname} – {t.untertitel}")
@@ -78,7 +83,8 @@ class Hauptfenster(QMainWindow):
         haupt.addWidget(kopf)
 
         inhalt = QVBoxLayout()
-        inhalt.setContentsMargins(g.abstand, g.abstand, g.abstand, 0)
+        # unten Platz für das Wasserzeichen lassen
+        inhalt.setContentsMargins(g.abstand, g.abstand, g.abstand, g.abstand + g.schrift_klein + 8)
         inhalt.setSpacing(g.abstand)
         haupt.addLayout(inhalt, 1)
 
@@ -100,19 +106,23 @@ class Hauptfenster(QMainWindow):
         ml.addWidget(self.knopf_neu)
         inhalt.addWidget(self.meldungsleiste)
 
-        # --- Mitte: Titel | Vorschau | Bedienfeld --------------------------
+        # --- Mitte: Overlays | Vorschau + Twitch | Bedienfeld ---------------
         reihe = QHBoxLayout()
         reihe.setSpacing(g.abstand)
         inhalt.addLayout(reihe, 1)
 
         links = flaeche()
-        links.setFixedWidth(int(g.titelliste_breite))
+        links.setFixedWidth(int(g.overlayliste_breite))
         ll = QVBoxLayout(links)
         ll.setContentsMargins(g.abstand, g.abstand, g.abstand, g.abstand)
-        self.titelliste = TitelListe(E)
-        ll.addWidget(self.titelliste)
+        self.overlayliste = OverlayListe(E, uno)
+        ll.addWidget(self.overlayliste, 1)
+        self.uno_meldung = meldung()
+        ll.addWidget(self.uno_meldung)
         reihe.addWidget(links)
 
+        spalte = QVBoxLayout()
+        spalte.setSpacing(g.abstand)
         vorschau_flaeche = flaeche()
         vl = QVBoxLayout(vorschau_flaeche)
         vl.setContentsMargins(g.abstand, g.abstand, g.abstand, g.abstand)
@@ -124,58 +134,97 @@ class Hauptfenster(QMainWindow):
         vl.addLayout(szenenzeile)
         self.vorschaubild = VorschauBild(E)
         vl.addWidget(self.vorschaubild, 1)
-        reihe.addWidget(vorschau_flaeche, 1)
+        spalte.addWidget(vorschau_flaeche, 1)
+
+        twitch_flaeche = flaeche()
+        tl = QVBoxLayout(twitch_flaeche)
+        tl.setContentsMargins(g.abstand, g.abstand, g.abstand, g.abstand)
+        self.twitch_bereich = TwitchBereich(E, twitch)
+        tl.addWidget(self.twitch_bereich)
+        spalte.addWidget(twitch_flaeche)
+        reihe.addLayout(spalte, 1)
 
         rechts = flaeche()
         rechts.setFixedWidth(int(g.seitenleiste_breite))
         rl = QVBoxLayout(rechts)
         rl.setContentsMargins(g.abstand, g.abstand, g.abstand, g.abstand)
         self.bedienfelder = QStackedWidget()
+        self.uno_einrichtung = UnoEinrichtung(E, uno)
+        self.overlay_bedienfeld = OverlayBedienfeld(E, uno)
+        self.bedienfelder.addWidget(self.uno_einrichtung)
+        self.bedienfelder.addWidget(self.overlay_bedienfeld)
         rl.addWidget(self.bedienfelder)
         reihe.addWidget(rechts)
 
-        # --- Fußzeile mit Build-Anzeige -----------------------------------
-        fuss = QHBoxLayout()
-        fuss.setContentsMargins(g.abstand + 4, 4, g.abstand, 8)
-        self.build = beschriftung(einstellungen.build_anzeige(E), "build")
-        fuss.addWidget(self.build)
-        fuss.addStretch(1)
-        haupt.addLayout(fuss)
+        # --- Wasserzeichen mit Build-Nummer unten links ---------------------
+        self.build = QLabel(einstellungen.build_anzeige(E), mitte)
+        self.build.setObjectName("build")
+        self.build.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        deckkraft = QGraphicsOpacityEffect(self.build)
+        deckkraft.setOpacity(float(g.build_deckkraft))
+        self.build.setGraphicsEffect(deckkraft)
+        self.build.adjustSize()
 
-        # --- Titel eintragen ---------------------------------------------
-        self._bedienfeld_index: dict[str, int] = {}
-        self.countdown_bereich = CountdownBereich(E, countdown)
-        self.countdown_bereich.einrichten_geklickt.connect(self.countdown_einrichten)
-        self._titel_eintragen(countdown, self.countdown_bereich)
-        self.titelliste.titel_gewaehlt.connect(self._titel_zeigen)
-        self.titelliste.waehlen(countdown.kennung)
-        if start_meldung:
-            self.countdown_bereich.meldung_zeigen(start_meldung, False)
-            self.countdown_bereich.einrichten.setEnabled(False)
+        # --- Bedienung ------------------------------------------------------
+        self.overlayliste.gewaehlt.connect(self._overlay_zeigen)
+        self.overlayliste.einrichten_geklickt.connect(self._einrichtung_zeigen)
+        self.uno_einrichtung.zurueck_geklickt.connect(self._zurueck_zur_auswahl)
+        uno.liste_geaendert.connect(self._liste_geaendert)
+        uno.meldung.connect(lambda text, fehler: self.uno_meldung.zeigen(text, False if fehler else None))
 
-        # --- Signale ------------------------------------------------------
         verbindung.status_geaendert.connect(self._status)
-        verbindung.sendung_geaendert.connect(self.on_air.zeigen)
+        verbindung.sendung_geaendert.connect(self._sendung)
         verbindung.szene_geaendert.connect(self._szene)
         vorschau.neues_bild.connect(self._bild)
+        motor.zustand_geaendert.connect(lambda *_: self._meldungsleiste_auffrischen())
+        motor.sammlung_meldung.connect(self._sammlung)
 
-        self._obs_start_sperre = QTimer(self)
-        self._obs_start_sperre.setSingleShot(True)
-        self._obs_start_sperre.timeout.connect(self._meldungsleiste_auffrischen)
+        self._stopp_uhr = QTimer(self)
+        self._stopp_uhr.setSingleShot(True)
+        self._stopp_uhr.timeout.connect(self._endgueltig_schliessen)
 
         self._status(verbindung.status, verbindung.meldung)
         self.on_air.zeigen(verbindung.sendung)
+        self._liste_geaendert()
         mitte.setFocus()
 
     # ------------------------------------------------------------------
-    def _titel_eintragen(self, titel, bedienfeld: QWidget) -> None:
-        self._bedienfeld_index[titel.kennung] = self.bedienfelder.addWidget(bedienfeld)
-        self.titelliste.hinzufuegen(titel)
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        g = self.E.groessen
+        self.build.adjustSize()
+        mitte = self.centralWidget()
+        self.build.move(g.abstand + 4, mitte.height() - self.build.height() - 6)
+        self.build.raise_()
 
-    def _titel_zeigen(self, kennung: str) -> None:
-        if kennung in self._bedienfeld_index:
-            self.bedienfelder.setCurrentIndex(self._bedienfeld_index[kennung])
+    # --- Overlays ---------------------------------------------------------
+    def _overlay_zeigen(self, schluessel: str) -> None:
+        overlay = self.uno.overlays.get(schluessel)
+        if overlay is None:
+            self._zurueck_zur_auswahl()
+            return
+        self.overlay_bedienfeld.zeigen(overlay)
+        self.bedienfelder.setCurrentWidget(self.overlay_bedienfeld)
 
+    def _einrichtung_zeigen(self) -> None:
+        self.overlayliste.auswahl_aufheben()
+        self.uno_einrichtung.projekte_zeigen()
+        self.bedienfelder.setCurrentWidget(self.uno_einrichtung)
+
+    def _zurueck_zur_auswahl(self) -> None:
+        if self.uno.overlays:
+            self.overlayliste.waehlen(next(iter(self.uno.overlays)))
+        else:
+            self._einrichtung_zeigen()
+
+    def _liste_geaendert(self) -> None:
+        """Ohne Uno-Projekt: gleich die Einrichtung zeigen. Sonst das erste Overlay wählen."""
+        if self.bedienfelder.currentWidget() is self.uno_einrichtung and self.uno.projekte:
+            return  # gerade beim Einrichten – dort bleiben
+        if self.overlayliste.gewaehlter is None:
+            self._zurueck_zur_auswahl()
+
+    # --- OBS ----------------------------------------------------------------
     def _status(self, status: Status, _meldung: str) -> None:
         self.verbindungsanzeige.zeigen(status)
         if status is not Status.VERBUNDEN:
@@ -184,20 +233,31 @@ class Hauptfenster(QMainWindow):
             self.vorschaubild.text_setzen(self.E.texte.vorschau_wartet)
         self._meldungsleiste_auffrischen()
 
+    def _sammlung(self, text: str) -> None:
+        self._sammlung_text = text
+        self._meldungsleiste_auffrischen()
+
     def _meldungsleiste_auffrischen(self) -> None:
-        v = self.verbindung
-        startet = self._obs_start_sperre.isActive()
-        # Nach „OBS starten“ bleibt der Hinweis stehen, bis OBS verbunden ist (kein Flackern).
-        zeigen = not v.verbunden and (startet or (v.status is Status.GETRENNT and bool(v.meldung)))
-        self.meldungsleiste.setVisible(zeigen)
-        if not zeigen:
-            return
-        if startet:
-            self.meldungstext.setText(self.E.texte.meldung_obs_startet)
-            self.knopf_obs_starten.setVisible(False)
-        else:
-            self.meldungstext.setText(v.meldung)
-            self.knopf_obs_starten.setVisible(not zugang.obs_laeuft())
+        v, m, t = self.verbindung, self.motor, self.E.texte
+        text, obs_knopf, neu_knopf = "", False, False
+        if v.verbunden:
+            text = self._sammlung_text
+        elif m.zustand is MotorZustand.STARTET:
+            text = t.meldung_obs_startet  # bleibt stehen, bis OBS verbunden ist (kein Flackern)
+        elif m.zustand is MotorZustand.FEHLER:
+            text, obs_knopf, neu_knopf = m.meldung, True, True
+        elif v.status is Status.GETRENNT and v.meldung:
+            text, neu_knopf = v.meldung, True
+            obs_knopf = not m.obs_laeuft()
+        self.meldungsleiste.setVisible(bool(text))
+        self.meldungstext.setText(text)
+        self.knopf_obs_starten.setVisible(obs_knopf and not m.obs_laeuft())
+        self.knopf_neu.setVisible(neu_knopf)
+
+    def _sendung(self, sendung: Sendung) -> None:
+        self.on_air.zeigen(sendung)
+        if self._stoppt_fuer_ende and sendung is Sendung.AUS:
+            self._endgueltig_schliessen()
 
     def _szene(self, name: str) -> None:
         self.szenenname.setText(name)
@@ -206,36 +266,47 @@ class Hauptfenster(QMainWindow):
         if self.verbindung.verbunden:
             self.vorschaubild.bild_setzen(bild)
 
-    # ------------------------------------------------------------------
     def obs_starten(self) -> None:
-        teile = shlex.split(str(self.E.obs.startbefehl))
-        if not teile:
-            return
-        ok = QProcess.startDetached(teile[0], teile[1:])
-        if isinstance(ok, tuple):  # je nach PySide-Version (ok, prozessnummer)
-            ok = ok[0]
-        if ok:
-            log.info("OBS gestartet")
-            self._obs_start_sperre.start(15000)  # 15 s lang nicht doppelt starten
-            self.verbindung.jetzt_neu_verbinden()
-        else:
-            log.warning("OBS ließ sich nicht starten: %s", teile)
-            self.meldungstext.setText(self.E.texte.meldung_obs_start_fehler)
-            return
+        self.motor.starten()
         self._meldungsleiste_auffrischen()
 
-    def countdown_einrichten(self) -> None:
-        if self._einrichten_laeuft is not None or not self.countdown_adresse:
+    # --- Schließen ----------------------------------------------------------
+    def frage_beenden(self) -> bool:
+        """Große, einfache Nachfrage, wenn gerade live gestreamt wird."""
+        t, g = self.E.texte, self.E.groessen
+        box = QMessageBox(self)
+        box.setWindowTitle(t.frage_beenden_live_titel)
+        box.setText(t.frage_beenden_live)
+        box.setIcon(QMessageBox.Icon.Warning)
+        ja = box.addButton(t.knopf_beenden_ja, QMessageBox.ButtonRole.DestructiveRole)
+        nein = box.addButton(t.knopf_beenden_nein, QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(nein)
+        box.setStyleSheet(stylesheet(self.E) + f"QMessageBox {{ background-color: {self.E.farben.flaeche}; }}"
+                          f"QLabel {{ font-size: {g.schrift}px; }} QPushButton {{ min-width: 340px; }}")
+        box.exec()
+        return box.clickedButton() is ja
+
+    def closeEvent(self, e):
+        if self._schliessen_erlaubt:
+            e.accept()
             return
-        knopf_ = self.countdown_bereich.einrichten
-        knopf_.setEnabled(False)
-        self.countdown_bereich.meldung_zeigen("…")
+        if self._stoppt_fuer_ende:
+            e.ignore()
+            return
+        if self.motor.braucht_nachfrage_beim_beenden:
+            if not self.frage_beenden():
+                e.ignore()
+                return
+            # Erst den Stream sauber beenden, dann schließen (spätestens nach 15 s)
+            log.info("Beende Stream vor dem Schließen")
+            self._stoppt_fuer_ende = True
+            self.verbindung.anfrage("StopStream")
+            self._stopp_uhr.start(STREAM_STOPP_WARTEN_MS)
+            e.ignore()
+            return
+        e.accept()
 
-        def fertig(erfolg: bool, meldung: str):
-            self._einrichten_laeuft = None
-            knopf_.setEnabled(True)
-            self.countdown_bereich.meldung_zeigen(meldung, erfolg)
-
-        self._einrichten_laeuft = CountdownEinrichten(
-            self.verbindung, str(self.E.countdown.obs_quellenname), self.countdown_adresse, self.E.texte, fertig)
-        self._einrichten_laeuft.los()
+    def _endgueltig_schliessen(self) -> None:
+        self._stopp_uhr.stop()
+        self._schliessen_erlaubt = True
+        self.close()
