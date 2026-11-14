@@ -34,7 +34,9 @@ OpenRegie wird Open Source: keine Geheimnisse im Code, Zugangsdaten nur im Passw
 - [x] „Mit Twitch anmelden“ (offizielle Anmeldung ohne geheimen Schlüssel) und Streamtitel ändern
 - [x] Rotes On-Air-Licht (aus Build 1.0)
 - [ ] Ein bis zwei Test-Streams durch Kevin
+- [x] Einzel-Unos (z. B. „Countdown | Circles“) einfügen – Korrektur nach erstem Test
 - [ ] Prüfung mit dem echten Overlays.uno-Konto (Antwortformat von Uno)
+- [ ] Einzel-Uno: Befehle mit echter Adresse klären (Zustand für Tally, Countdown Play/Reset und Dauer)
 - [ ] Twitch-App anlegen und Client-ID eintragen
 
 ### Build 1.2

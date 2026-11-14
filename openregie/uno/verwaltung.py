@@ -11,6 +11,13 @@ An diese Adresse schickt OpenRegie Befehle (HTTP PUT mit JSON):
     {"command": "SetOverlayContentField", "id": "…", "fieldId": "…", "value": "…"}
 Antwort: {"status": 200, "result": "ok", "payload": …}
 
+Es gibt zwei Arten von Uno-Adressen:
+  - Projekte mit mehreren Overlays verstehen „GetOverlays“; jedes Overlay hat eine „id“.
+  - Einzel-Unos (z. B. ein einzelnes „Countdown | Circles“) sind EIN Overlay. Sie lehnen
+    „GetOverlays“ mit HTTP 400 „Invalid command: GetOverlays“ ab – die Adresse ist trotzdem
+    gültig. Befehle an Einzel-Unos gehen ohne „id“.
+Nur „nicht gefunden“ (404) bzw. ein ungültiger Schlüssel (401/403) heißt: Adresse falsch.
+
 Wer die Adresse kennt, kann die Overlays steuern. Darum liegt sie nur im
 Passwortspeicher des Systems (siehe geheimspeicher.py), nie im Klartext.
 
@@ -147,6 +154,36 @@ def felder_lesen(payload) -> list[tuple[str, str]]:
     return felder
 
 
+# Arten von Fehlern bei Uno
+UNBEKANNTER_BEFEHL = "unbekannter_befehl"  # Adresse gültig, Befehl passt nur nicht zu dieser Art Uno
+NICHT_GEFUNDEN = "nicht_gefunden"  # Adresse/Schlüssel gibt es nicht
+KEIN_INTERNET = "kein_internet"
+SONSTIGER_FEHLER = "fehler"
+
+
+def uno_fehlermeldung(daten) -> str:
+    """Die Fehlermeldung von Uno, z. B. „Invalid command: GetOverlays“ (leer, wenn keine)."""
+    if isinstance(daten, dict):
+        fehler = daten.get("error")
+        if isinstance(fehler, dict):
+            return str(fehler.get("message") or "")
+        if isinstance(fehler, str):
+            return fehler
+        return str(daten.get("message") or "")
+    return ""
+
+
+def fehlerart(code: int, daten) -> str:
+    if code == 0:
+        return KEIN_INTERNET
+    meldung = uno_fehlermeldung(daten).strip().lower()
+    if meldung.startswith("invalid command"):
+        return UNBEKANNTER_BEFEHL
+    if code in (401, 403, 404):
+        return NICHT_GEFUNDEN
+    return SONSTIGER_FEHLER
+
+
 def uno_ok(code: int, daten) -> bool:
     if not 200 <= code < 300:
         return False
@@ -175,9 +212,10 @@ class Overlay:
 
 
 class UnoProjekt:
-    def __init__(self, name: str, token: str):
+    def __init__(self, name: str, token: str, einzeln: bool = False):
         self.name = name
         self.token = token
+        self.einzeln = einzeln  # True = Einzel-Uno (genau ein Overlay, kennt kein „GetOverlays“)
         self.erreichbar: bool | None = None
 
 
@@ -215,7 +253,7 @@ class UnoVerwaltung(QObject):
             self.speicher_fehler = True
             self.meldung.emit(self._texte.meldung_speicher_fehler, True)
             gespeichert = []
-        self.projekte = [UnoProjekt(str(p.get("name") or ""), str(p["token"]))
+        self.projekte = [UnoProjekt(str(p.get("name") or ""), str(p["token"]), bool(p.get("einzeln", False)))
                          for p in gespeichert if isinstance(p, dict) and p.get("token")]
         log.info("%d Uno-Projekt(e) geladen", len(self.projekte))
         self.auffrischen()
@@ -224,7 +262,8 @@ class UnoVerwaltung(QObject):
     def _speichern(self) -> bool:
         try:
             self._speicher.json_schreiben(SPEICHER_SCHLUESSEL,
-                                          [{"name": p.name, "token": p.token} for p in self.projekte])
+                                          [{"name": p.name, "token": p.token, "einzeln": p.einzeln}
+                                           for p in self.projekte])
             return True
         except SpeicherFehler as fehler:
             log.error("Speichern im Passwortspeicher fehlgeschlagen: %s", fehler)
@@ -242,17 +281,27 @@ class UnoVerwaltung(QObject):
             return
         projekt = UnoProjekt(self._texte.uno_projekt_name.format(nummer=len(self.projekte) + 1), token)
 
-        def antwort(ok, payload, _fehler):
-            if not ok:
-                fertig(False, self._texte.meldung_uno_adresse_unbekannt)
+        def antwort(ok, payload, fehler, art):
+            if not ok and art == UNBEKANNTER_BEFEHL:
+                # Adresse gültig, aber ein Einzel-Uno (kennt „GetOverlays“ nicht)
+                projekt.einzeln = True
+                projekt.name = self._texte.uno_einzel_name.format(nummer=len(self.projekte) + 1)
+            elif not ok:
+                # Nur „nicht gefunden“ heißt „Adresse falsch“ – sonst die echte Ursache nennen
+                fertig(False, self._texte.meldung_uno_adresse_unbekannt if art == NICHT_GEFUNDEN else fehler)
                 return
+            projekt.erreichbar = True
             self.projekte.append(projekt)
             if not self._speichern():
                 self.projekte.remove(projekt)
                 fertig(False, self._texte.meldung_speicher_fehler)
                 return
-            self._overlays_uebernehmen(projekt, payload)
-            fertig(True, self._texte.meldung_uno_projekt_ok.format(anzahl=len(overlays_lesen(payload))))
+            if projekt.einzeln:
+                self._einzel_overlay(projekt)
+                fertig(True, self._texte.meldung_uno_einzel_ok)
+            else:
+                self._overlays_uebernehmen(projekt, payload)
+                fertig(True, self._texte.meldung_uno_projekt_ok.format(anzahl=len(overlays_lesen(payload))))
 
         self._befehl(projekt, {"command": "GetOverlays"}, antwort)
 
@@ -270,14 +319,26 @@ class UnoVerwaltung(QObject):
     def auffrischen(self, still: bool = False) -> None:
         """Holt die Overlay-Listen aller Projekte neu (Knopf „Liste neu laden“)."""
         for projekt in self.projekte:
+            if projekt.einzeln:
+                # Einzel-Uno: immer genau ein Overlay, keine Liste zum Abfragen
+                self._einzel_overlay(projekt)
+                continue
             self._laedt += 1
 
-            def antwort(ok, payload, fehler, p=projekt):
+            def antwort(ok, payload, fehler, art, p=projekt):
                 self._laedt -= 1
                 war = p.erreichbar
+                if not ok and art == UNBEKANNTER_BEFEHL:
+                    # Gespeichertes Projekt ist in Wahrheit ein Einzel-Uno: merken
+                    log.info("Uno-Projekt %s ist ein Einzel-Uno", p.name)
+                    p.einzeln, ok = True, True
+                    self._speichern()
+                    self._einzel_overlay(p)
+                    payload = None
                 p.erreichbar = ok
                 if ok:
-                    self._overlays_uebernehmen(p, payload)
+                    if not p.einzeln:
+                        self._overlays_uebernehmen(p, payload)
                     if war is False:
                         self.meldung.emit("", False)
                 elif not still or war is not False:
@@ -289,6 +350,19 @@ class UnoVerwaltung(QObject):
     def _still_auffrischen(self) -> None:
         if self._laedt == 0:  # nicht stapeln, wenn Uno langsam ist
             self.auffrischen(still=True)
+
+    def _einzel_overlay(self, projekt: UnoProjekt) -> None:
+        """Ein Einzel-Uno ist genau ein Overlay (ohne Kennung)."""
+        schluessel = f"{projekt.token}/"
+        anders = False
+        for s in [s for s, o in self.overlays.items() if o.projekt is projekt and s != schluessel]:
+            del self.overlays[s]
+            anders = True
+        if schluessel not in self.overlays:
+            self.overlays[schluessel] = Overlay(projekt, "", projekt.name)
+            anders = True
+        if anders:
+            self.liste_geaendert.emit()
 
     def _overlays_uebernehmen(self, projekt: UnoProjekt, payload) -> None:
         neu = overlays_lesen(payload)
@@ -329,7 +403,7 @@ class UnoVerwaltung(QObject):
         self.overlay_geaendert.emit(overlay)
         befehl = "ShowOverlay" if sichtbar else "HideOverlay"
 
-        def antwort(ok, _payload, fehler):
+        def antwort(ok, _payload, fehler, _art):
             overlay.beschaeftigt = False
             if ok:
                 overlay.sichtbar = sichtbar
@@ -339,47 +413,57 @@ class UnoVerwaltung(QObject):
             if fertig:
                 fertig(ok, fehler)
 
-        self._befehl(overlay.projekt, {"command": befehl, "id": overlay.kennung}, antwort)
+        self._befehl(overlay.projekt, self._overlay_befehl(overlay, befehl), antwort)
 
     def felder_laden(self, overlay: Overlay, fertig=None) -> None:
-        def antwort(ok, payload, fehler):
+        def antwort(ok, payload, fehler, _art):
             if ok:
                 overlay.felder = felder_lesen(payload)
                 self.overlay_geaendert.emit(overlay)
             if fertig:
                 fertig(ok, fehler)
 
-        self._befehl(overlay.projekt, {"command": "GetOverlayContent", "id": overlay.kennung}, antwort)
+        self._befehl(overlay.projekt, self._overlay_befehl(overlay, "GetOverlayContent"), antwort)
 
     def feld_setzen(self, overlay: Overlay, feld: str, text: str, fertig=None) -> None:
-        def antwort(ok, _payload, fehler):
+        def antwort(ok, _payload, fehler, _art):
             if ok:
                 overlay.felder = [(k, text if k == feld else v) for k, v in overlay.felder]
                 self.overlay_geaendert.emit(overlay)
             if fertig:
                 fertig(ok, fehler)
 
-        self._befehl(overlay.projekt, {"command": "SetOverlayContentField", "id": overlay.kennung,
-                                       "fieldId": feld, "value": text}, antwort)
+        self._befehl(overlay.projekt, self._overlay_befehl(overlay, "SetOverlayContentField",
+                                                           fieldId=feld, value=text), antwort)
 
     # ------------------------------------------------------------------
+    @staticmethod
+    def _overlay_befehl(overlay: Overlay, befehl: str, **mehr) -> dict:
+        """Befehl für ein Overlay. Einzel-Unos bekommen keine „id“."""
+        nachricht = {"command": befehl}
+        if overlay.kennung:
+            nachricht["id"] = overlay.kennung
+        nachricht.update(mehr)
+        return nachricht
+
     def _befehl(self, projekt: UnoProjekt, befehl: dict, rueckruf) -> None:
-        """Schickt einen Befehl. rueckruf(ok, payload, fehlertext_fuer_menschen)."""
+        """Schickt einen Befehl. rueckruf(ok, payload, fehlertext_fuer_menschen, fehlerart)."""
         adresse = f"{str(self._E.basisadresse).rstrip('/')}/apiv2/controlapps/{projekt.token}/api"
 
         def fertig(code, daten, netzfehler):
             if uno_ok(code, daten):
-                rueckruf(True, daten.get("payload") if isinstance(daten, dict) else daten, "")
+                rueckruf(True, daten.get("payload") if isinstance(daten, dict) else daten, "", "")
                 return
-            if code == 0:
-                text = self._texte.meldung_uno_kein_internet
-            elif code == 404:
-                text = self._texte.meldung_uno_adresse_unbekannt
-            else:
-                text = self._texte.meldung_uno_fehler
+            art = fehlerart(code, daten)
+            text = {
+                KEIN_INTERNET: self._texte.meldung_uno_kein_internet,
+                NICHT_GEFUNDEN: self._texte.meldung_uno_adresse_unbekannt,
+                UNBEKANNTER_BEFEHL: self._texte.meldung_uno_befehl_unbekannt,
+            }.get(art, self._texte.meldung_uno_fehler)
             # Den geheimen Teil der Adresse nie ins Protokoll schreiben
-            log.info("Uno-Befehl %s abgelehnt (HTTP %s): %.200s %s", befehl.get("command"), code, daten, netzfehler)
-            rueckruf(False, None, text)
+            log.info("Uno-Befehl %s abgelehnt (HTTP %s, %s): %.200s %s",
+                     befehl.get("command"), code, art, daten, netzfehler)
+            rueckruf(False, None, text, art)
 
         self._netz.anfrage("PUT", adresse, fertig, json_daten=befehl)
 

@@ -15,7 +15,7 @@ from openregie.oberflaeche.hauptfenster import Hauptfenster
 from openregie.twitch.konto import Anmeldung, TwitchKonto
 from openregie.uno.verwaltung import UnoVerwaltung
 
-from .falsches_internet import UNO_ADRESSE_TEXT, UNO_TOKEN, FalschesInternet
+from .falsches_internet import EINZEL_ADRESSE_TEXT, UNO_ADRESSE_TEXT, UNO_TOKEN, FalschesInternet
 from .falsches_obs import FalschesObs
 from .hilfen import app, internet_einstellungen, obs_einstellungen, warte, warte_bis, zugang
 
@@ -244,6 +244,20 @@ class TwitchFensterTest(Grundlage):
     def test_ohne_uno_projekt_einrichtung_zeigen(self):
         self.assertIs(self.f.bedienfelder.currentWidget(), self.f.uno_einrichtung)
         self.assertTrue(self.f.overlayliste.leer.isVisible())
+
+    def test_einzel_uno_per_zwischenablage(self):
+        """Fehler aus Build 1.1: ein einzelnes „Countdown | Circles“-Uno ließ sich nicht einfügen."""
+        e = self.f.uno_einrichtung
+        e._zwischenablage = lambda: EINZEL_ADRESSE_TEXT
+        klick(e.einfuegen)
+        self.assertTrue(warte_bis(lambda: e.meldung.text() == self.E.texte.meldung_uno_einzel_ok, 3000))
+        self.assertEqual(e.meldung.objectName(), "gut")  # grün, nicht rot
+        self.assertEqual(len(self.f.overlayliste.zeilen), 1)
+        z = next(iter(self.f.overlayliste.zeilen.values()))
+        self.assertTrue(z.isVisible())
+        klick(z.schalter)
+        self.assertTrue(warte_bis(lambda: self.netz.einzel["visible"], 3000))
+        self.assertTrue(warte_bis(lambda: z.schalter.text() == self.E.texte.knopf_aus, 3000))
 
     def test_uno_projekt_per_zwischenablage(self):
         e = self.f.uno_einrichtung

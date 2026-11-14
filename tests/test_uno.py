@@ -3,10 +3,14 @@
 import unittest
 
 from openregie.geheimspeicher import Arbeitsspeicher
-from openregie.uno.verwaltung import (UnoVerwaltung, felder_lesen, ist_textfeld, overlays_lesen,
+import json
+
+from openregie.uno.verwaltung import (KEIN_INTERNET, NICHT_GEFUNDEN, SONSTIGER_FEHLER, UNBEKANNTER_BEFEHL,
+                                      UnoVerwaltung, felder_lesen, fehlerart, ist_textfeld, overlays_lesen,
                                       sichtbarkeit_lesen, token_aus_text)
 
-from .falsches_internet import UNO_ADRESSE_TEXT, UNO_TOKEN, FalschesInternet
+from .falsches_internet import (EINZEL_ADRESSE_TEXT, EINZEL_TOKEN, UNO_ADRESSE_TEXT, UNO_TOKEN,
+                                FalschesInternet)
 from .hilfen import app, internet_einstellungen, warte, warte_bis
 
 
@@ -56,6 +60,26 @@ class AntwortenLesenTest(unittest.TestCase):
         self.assertEqual(felder_lesen([{"fieldId": "A", "value": "b"}, {"id": "C", "value": 3}]), [("A", "b")])
         self.assertFalse(ist_textfeld("#abc"))
         self.assertTrue(ist_textfeld("#1 im Stream"))
+
+
+class FehlerartTest(unittest.TestCase):
+    def test_invalid_command_heisst_adresse_gueltig(self):
+        # genau die Antwort, die ein echtes Einzel-Uno auf GetOverlays gibt
+        antwort = {"error": {"message": "Invalid command: GetOverlays", "code": 400}}
+        self.assertEqual(fehlerart(400, antwort), UNBEKANNTER_BEFEHL)
+        self.assertEqual(fehlerart(400, {"error": {"message": "invalid command"}}), UNBEKANNTER_BEFEHL)
+
+    def test_nicht_gefunden(self):
+        self.assertEqual(fehlerart(404, {"error": {"message": "API Not Found", "code": 404}}), NICHT_GEFUNDEN)
+        self.assertEqual(fehlerart(401, None), NICHT_GEFUNDEN)
+        self.assertEqual(fehlerart(403, {}), NICHT_GEFUNDEN)
+
+    def test_sonstiges(self):
+        self.assertEqual(fehlerart(0, None), KEIN_INTERNET)
+        self.assertEqual(fehlerart(500, {"error": {"message": "Server Error"}}), SONSTIGER_FEHLER)
+        self.assertEqual(fehlerart(429, None), SONSTIGER_FEHLER)  # zu viele Anfragen
+        self.assertEqual(fehlerart(400, {"error": {"message": "Missing id"}}), SONSTIGER_FEHLER)
+        self.assertEqual(fehlerart(400, "kein json"), SONSTIGER_FEHLER)
 
 
 class VerwaltungTest(unittest.TestCase):
@@ -206,6 +230,95 @@ class VerwaltungTest(unittest.TestCase):
         self.netz.verzoegerung = 0
         # Abfrage jede Sekunde, aber höchstens eine gleichzeitig: deutlich weniger als 3
         self.assertLessEqual(self.netz.anzahl("GetOverlays") - vorher, 3)
+
+    # --- Einzel-Unos (kennen kein GetOverlays) --------------------------------
+    def test_einzel_uno_hinzufuegen(self):
+        """Der Fehler aus Build 1.1: Einzel-Uno galt als „Adresse unbekannt“."""
+        self.uno.laden()
+        ok, meldung = self.hinzufuegen(EINZEL_ADRESSE_TEXT)
+        self.assertTrue(ok, meldung)
+        self.assertEqual(meldung, self.E.texte.meldung_uno_einzel_ok)
+        self.assertNotEqual(meldung, self.E.texte.meldung_uno_adresse_unbekannt)
+        self.assertEqual(len(self.uno.overlays), 1)
+        o = next(iter(self.uno.overlays.values()))
+        self.assertEqual(o.kennung, "")
+        self.assertEqual(o.name, "Uno-Overlay 1")
+        self.assertIsNone(o.sichtbar)  # Uno sagt beim Einzel-Uno nichts über den Zustand
+        gespeichert = json.loads(self.speicher.daten["uno"])
+        self.assertEqual(gespeichert, [{"name": "Uno-Overlay 1", "token": EINZEL_TOKEN, "einzeln": True}])
+        self.assertFalse([m for m in self.meldungen if m[1]])  # keine rote Meldung
+
+    def test_einzel_uno_ein_und_ausblenden_ohne_id(self):
+        self.hinzufuegen(EINZEL_ADRESSE_TEXT)
+        o = next(iter(self.uno.overlays.values()))
+        self.uno.umschalten(o)
+        self.assertTrue(warte_bis(lambda: o.sichtbar is True, 3000))
+        self.assertTrue(self.netz.einzel["visible"])
+        self.uno.umschalten(o)
+        self.assertTrue(warte_bis(lambda: o.sichtbar is False, 3000))
+        self.assertFalse(self.netz.einzel["visible"])
+        for befehl in self.netz.einzel_befehle:
+            if befehl["command"] != "GetOverlays":
+                self.assertNotIn("id", befehl)
+
+    def test_einzel_uno_texte(self):
+        self.hinzufuegen(EINZEL_ADRESSE_TEXT)
+        o = next(iter(self.uno.overlays.values()))
+        fertig = []
+        self.uno.felder_laden(o, lambda ok, f: fertig.append(ok))
+        self.assertTrue(warte_bis(lambda: fertig, 3000))
+        self.assertEqual(o.felder, [("Titel", "Gleich geht's los")])
+        fertig.clear()
+        self.uno.feld_setzen(o, "Titel", "Gleich!", lambda ok, f: fertig.append(ok))
+        self.assertTrue(warte_bis(lambda: fertig == [True], 3000))
+        self.assertEqual(self.netz.einzel["inhalt"]["Titel"], "Gleich!")
+        self.assertNotIn("id", self.netz.einzel_befehle[-1])
+
+    def test_einzel_uno_wird_nicht_dauernd_abgefragt(self):
+        self.speicher.json_schreiben("uno", [{"name": "Uno-Overlay 1", "token": EINZEL_TOKEN, "einzeln": True}])
+        self.uno.laden()
+        self.assertEqual(len(self.uno.overlays), 1)
+        warte(2500)  # Abfrage läuft jede Sekunde
+        self.assertEqual(self.netz.einzel_befehle, [])  # kein sinnloses GetOverlays (schont das Uno-Limit)
+
+    def test_altes_gespeichertes_einzel_uno_wird_erkannt(self):
+        # gespeichert mit Build 1.1, noch ohne „einzeln“
+        self.speicher.json_schreiben("uno", [{"name": "Uno-Projekt 1", "token": EINZEL_TOKEN}])
+        self.uno.laden()
+        self.assertTrue(warte_bis(lambda: len(self.uno.overlays) == 1, 3000))
+        self.assertTrue(json.loads(self.speicher.daten["uno"])[0]["einzeln"])
+        self.assertFalse([m for m in self.meldungen if m[1]])
+        anzahl = len(self.netz.einzel_befehle)
+        warte(2500)
+        self.assertEqual(len(self.netz.einzel_befehle), anzahl)  # danach keine Abfrage mehr
+
+    def test_beide_arten_zusammen(self):
+        self.uno.laden()
+        self.assertTrue(self.hinzufuegen()[0])
+        self.assertTrue(self.hinzufuegen(EINZEL_ADRESSE_TEXT)[0])
+        self.assertEqual([o.name for o in self.uno.overlays.values()],
+                         ["Bauchbinde", "News-Ticker", "Countdown", "Uno-Overlay 2"])
+        self.uno.auffrischen()
+        warte(500)
+        self.assertEqual(len(self.uno.overlays), 4)
+        self.uno.projekt_entfernen(self.uno.projekte[1])
+        self.assertEqual(len(self.uno.overlays), 3)
+
+    def test_einzel_uno_doppelt(self):
+        self.assertTrue(self.hinzufuegen(EINZEL_ADRESSE_TEXT)[0])
+        self.assertEqual(self.hinzufuegen(EINZEL_ADRESSE_TEXT), (False, self.E.texte.meldung_uno_schon_da))
+
+    def test_nur_echtes_nicht_gefunden_ist_rot_adresse_unbekannt(self):
+        """Kein Internet oder Uno-Störung darf nicht als „Adresse unbekannt“ erscheinen."""
+        self.netz.aus = True
+        self.assertEqual(self.hinzufuegen(), (False, self.E.texte.meldung_uno_kein_internet))
+        self.netz.aus = False
+        self.netz.uno_kaputt = True
+        self.assertEqual(self.hinzufuegen(), (False, self.E.texte.meldung_uno_fehler))
+        self.netz.uno_kaputt = False
+        self.assertEqual(self.hinzufuegen("https://app.overlays.uno/apiv2/controlapps/GIBTSNICHT123/api"),
+                         (False, self.E.texte.meldung_uno_adresse_unbekannt))
+        self.assertNotIn("uno", self.speicher.daten)
 
     def test_geheimer_teil_nicht_im_protokoll(self):
         with self.assertLogs("openregie.uno", level="INFO") as protokoll:

@@ -2,6 +2,33 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.1 – Korrektur: Einzel-Unos · 14.11.2026
+
+**Behoben**
+- Ein einzelnes Uno-Overlay (z. B. „Countdown | Circles“) ließ sich nicht einfügen: Es kam immer
+  „Uno kennt diese Adresse nicht“, obwohl die Adresse stimmte.
+  Ursache: OpenRegie prüfte die Adresse mit dem Befehl „GetOverlays“ und wertete *jede* Ablehnung als
+  „Adresse unbekannt“. Einzel-Unos kennen „GetOverlays“ nicht und antworten mit
+  HTTP 400 „Invalid command: GetOverlays“ – die Adresse ist dabei gültig.
+- Jetzt gilt:
+  - „Invalid command“ = Adresse gültig. Das Uno wird als **Einzel-Uno** erkannt und erscheint als ein
+    Overlay („Uno-Overlay 1“) in der Liste. Befehle an Einzel-Unos gehen ohne Overlay-Kennung.
+  - Nur ein echtes „nicht gefunden“ (HTTP 404) bzw. ein ungültiger Schlüssel (401/403) zeigt
+    „Uno kennt diese Adresse nicht“.
+  - Kein Internet oder eine Störung bei Uno werden als solche gemeldet, nicht mehr als „Adresse unbekannt“.
+  - Einzel-Unos werden nicht alle 5 Sekunden abgefragt (schont das Anfrage-Limit von Uno).
+  - Schon gespeicherte Einzel-Unos werden beim nächsten Start von selbst erkannt.
+
+**Neu**
+- `werkzeuge/uno_pruefen.py`: fragt ein echtes Uno, welche Befehle es versteht (nur Lese-Befehle,
+  Ein-/Ausblenden nur mit `--zeigen`). Die Adresse steht nur in `daten/geheim.toml` (nicht in Git).
+
+**Geprüft**
+- 118 automatische Tests (12 neu), zweimal hintereinander ohne Fehler. Das nachgeahmte Uno kennt jetzt
+  auch Einzel-Unos, die „GetOverlays“ genau wie das echte mit 400 „Invalid command“ ablehnen.
+- Gegenprobe: Die neuen Tests schlagen mit dem alten Code fehl.
+- Noch offen: Befehle eines echten Einzel-Unos (Tally-Zustand, Countdown Play/Reset/Dauer).
+
 ## Build 1.1 – erste Version zum Streamen · 14.11.2026
 
 **Neu**

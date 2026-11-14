@@ -14,6 +14,9 @@ from urllib.parse import parse_qs, urlparse
 
 UNO_TOKEN = "TESTtoken_123abc"
 UNO_ADRESSE_TEXT = f"https://app.overlays.uno/apiv2/controlapps/{UNO_TOKEN}/api"
+# Einzel-Uno (z. B. ein einzelnes „Countdown | Circles“): kennt kein GetOverlays
+EINZEL_TOKEN = "EINZELtoken_456def"
+EINZEL_ADRESSE_TEXT = f"https://app.overlays.uno/apiv2/controlapps/{EINZEL_TOKEN}/api"
 
 
 class FalschesInternet:
@@ -25,6 +28,9 @@ class FalschesInternet:
 
         # --- Uno ---------------------------------------------------------
         self.uno_tokens = {UNO_TOKEN}
+        self.einzel_tokens = {EINZEL_TOKEN}
+        self.einzel = {"visible": False, "inhalt": {"Titel": "Gleich geht's los"}}
+        self.einzel_befehle: list[dict] = []  # was beim Einzel-Uno ankam
         self.uno_mit_sichtbarkeit = True
         self.uno_kaputt = False  # True = Uno antwortet mit Fehler 500
         self.overlays = [
@@ -121,12 +127,16 @@ class FalschesInternet:
             # --- Uno -------------------------------------------------------
             def _uno(self, methode, pfad, d):
                 teile = pfad.split("/")  # ['', 'apiv2', 'controlapps', TOKEN, 'api']
-                if methode != "PUT" or len(teile) < 5 or teile[3] not in netz.uno_tokens:
+                bekannt = netz.uno_tokens | netz.einzel_tokens
+                if methode != "PUT" or len(teile) < 5 or teile[3] not in bekannt:
+                    # so antwortet das echte Uno auf einen unbekannten Schlüssel
                     return self._antwort(404, {"error": {"message": "API Not Found", "code": 404}})
                 if netz.uno_kaputt:
                     return self._antwort(500, {"error": {"message": "Server Error", "code": 500}})
                 befehl = (d or {}).get("command")
                 ok = lambda payload: self._antwort(200, {"status": 200, "result": "ok", "payload": payload})
+                if teile[3] in netz.einzel_tokens:
+                    return self._einzel_uno(befehl, d or {}, ok)
                 if befehl == "GetOverlays":
                     with netz.lock:
                         liste = [dict(o) for o in netz.overlays]
@@ -146,6 +156,21 @@ class FalschesInternet:
                     netz.inhalte.setdefault(overlay["id"], {})[d["fieldId"]] = d["value"]
                     return ok(True)
                 return self._antwort(400, {"error": {"message": "Unknown command", "code": 400}})
+
+            def _einzel_uno(self, befehl, d, ok):
+                with netz.lock:
+                    netz.einzel_befehle.append(dict(d))
+                e = netz.einzel
+                if befehl in ("ShowOverlay", "HideOverlay"):
+                    e["visible"] = befehl == "ShowOverlay"
+                    return ok(e["visible"])
+                if befehl == "GetOverlayContent":
+                    return ok(dict(e["inhalt"]))
+                if befehl == "SetOverlayContentField":
+                    e["inhalt"][d["fieldId"]] = d["value"]
+                    return ok(True)
+                # so antwortet das echte Einzel-Uno auf „GetOverlays“ (HTTP 400)
+                return self._antwort(400, {"error": {"message": f"Invalid command: {befehl}", "code": 400}})
 
             # --- Twitch ----------------------------------------------------
             def _twitch(self, methode, pfad, d):
