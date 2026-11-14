@@ -37,6 +37,7 @@ class FalschesInternet:
         self.einzel_befehle: list[dict] = []  # was beim Einzel-Uno ankam (…/api und PATCH)
         self.uno_mit_sichtbarkeit = True
         self.uno_kaputt = False  # True = Uno antwortet mit Fehler 500
+        self.unbekannte_befehle: set[str] = set()  # diese …/api-Befehle lehnt Uno mit 400 „Invalid command“ ab
         self.overlays = [
             {"id": "ov-1", "name": "Bauchbinde", "visible": False},
             {"id": "ov-2", "name": "News-Ticker", "visible": True},
@@ -151,6 +152,8 @@ class FalschesInternet:
                     return self._antwort(500, {"error": {"message": "Server Error", "code": 500}})
                 befehl = (d or {}).get("command")
                 ok = lambda payload: self._antwort(200, {"status": 200, "result": "ok", "payload": payload})
+                if befehl in netz.unbekannte_befehle:
+                    return self._antwort(400, {"error": {"message": f"Invalid command: {befehl}", "code": 400}})
                 if teile[3] in netz.einzel_tokens:
                     return self._einzel_uno(befehl, d or {}, ok)
                 if befehl == "GetOverlays":

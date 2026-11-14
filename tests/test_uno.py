@@ -136,7 +136,7 @@ class VerwaltungTest(unittest.TestCase):
     def test_speicher_kaputt(self):
         self.speicher.kaputt = True
         self.uno.laden()
-        self.assertTrue(self.uno.speicher_fehler)
+        self.assertTrue(warte_bis(lambda: self.uno.speicher_fehler, 3000))
         ok, meldung = self.hinzufuegen()
         self.assertFalse(ok)
         self.assertEqual(meldung, self.E.texte.meldung_speicher_fehler)
@@ -214,13 +214,16 @@ class VerwaltungTest(unittest.TestCase):
         self.netz.aus = True
         self.uno.umschalten(o, lambda ok, f: ergebnis.append((ok, f)))
         self.assertTrue(warte_bis(lambda: ergebnis, 3000))
-        self.assertEqual(ergebnis[0], (False, self.E.texte.meldung_uno_kein_internet))
+        # „nicht erreichbar“ steht EINMAL unter der Bibliothek, nicht zusätzlich im Bedienfeld
+        self.assertEqual(ergebnis[0], (False, ""))
+        self.assertIn((self.E.texte.meldung_uno_kein_internet, True), self.meldungen)
+        self.assertIs(o.projekt.erreichbar, False)
 
     def test_projekt_entfernen(self):
         self.hinzufuegen()
         self.uno.projekt_entfernen(self.uno.projekte[0])
         self.assertEqual(self.uno.overlays, {})
-        self.assertNotIn(UNO_TOKEN, self.speicher.daten["uno"])
+        self.assertTrue(warte_bis(lambda: UNO_TOKEN not in self.speicher.daten["uno"], 3000))
 
     def test_langsames_uno_stapelt_nicht(self):
         self.uno.laden()
@@ -314,7 +317,7 @@ class VerwaltungTest(unittest.TestCase):
     def test_einzel_uno_nur_control_abfragen(self):
         self.speicher.json_schreiben("uno", [{"name": "Countdown | Circles", "token": EINZEL_TOKEN, "einzeln": True}])
         self.uno.laden()
-        self.assertTrue(warte_bis(lambda: self.einzel().bauplan is not None, 3000))
+        self.assertTrue(warte_bis(lambda: self.uno.overlays and self.einzel().bauplan is not None, 3000))
         self.netz.einzel.zustand[HAUPT] = "In"  # jemand blendet in Uno selbst ein
         self.assertTrue(warte_bis(lambda: self.einzel().sichtbar is True, 3000))  # Tally folgt
         self.assertEqual(self.api_befehle_einzel(), [])  # kein sinnloses GetOverlays
@@ -326,8 +329,8 @@ class VerwaltungTest(unittest.TestCase):
         self.assertTrue(warte_bis(lambda: f"{EINZEL_TOKEN}/" in self.uno.overlays
                                   and self.einzel().bauplan is not None, 3000))
         self.assertEqual(len(self.uno.overlays), 1)
+        self.assertTrue(warte_bis(lambda: json.loads(self.speicher.daten["uno"])[0].get("einzeln"), 3000))
         gespeichert = json.loads(self.speicher.daten["uno"])[0]
-        self.assertTrue(gespeichert["einzeln"])
         self.assertEqual(gespeichert["name"], "Countdown | Circles")
         self.assertFalse([m for m in self.meldungen if m[1]])
 
@@ -335,16 +338,77 @@ class VerwaltungTest(unittest.TestCase):
         self.speicher.json_schreiben("uno", [{"name": "Countdown | Circles", "token": EINZEL_TOKEN, "einzeln": True}])
         self.netz.aus = True
         self.uno.laden()
+        self.assertTrue(warte_bis(lambda: self.uno.overlays, 3000))
         o = self.einzel()  # steht trotzdem in der Liste
         self.assertEqual(o.name, "Countdown | Circles")
+        self.assertFalse(o.bereit)
         ergebnis = []
         self.uno.umschalten(o, lambda ok, f: ergebnis.append((ok, f)))
         self.assertTrue(warte_bis(lambda: ergebnis, 3000))
-        self.assertEqual(ergebnis[0], (False, self.E.texte.meldung_uno_kein_internet))
-        self.assertTrue(warte_bis(lambda: self.meldungen, 3000))
+        self.assertEqual(ergebnis[0], (False, ""))  # still: wird noch geladen
+        self.assertTrue(warte_bis(lambda: self.meldungen, 4000))
+        self.assertEqual(self.meldungen, [(self.E.texte.meldung_uno_kein_internet, True)])
+        warte(2500)  # weitere vergebliche Abfragen …
+        self.assertEqual(len(self.meldungen), 1)  # … aber die Meldung kommt nur EINMAL
         self.netz.aus = False
-        self.assertTrue(warte_bis(lambda: self.einzel().bauplan is not None, 4000))  # nächste Abfrage holt es
+        self.assertTrue(warte_bis(lambda: o.bereit, 6000))  # nächste Abfrage holt es
+        self.assertIs(self.einzel(), o)  # dasselbe Overlay, nicht ausgetauscht
         self.assertTrue(warte_bis(lambda: ("", False) in self.meldungen, 3000))  # Meldung verschwindet
+
+    def test_neustart_overlay_wird_gefuellt_nicht_ersetzt(self):
+        """Fehler aus Build 1.1: nach dem Neustart hing „Ausgewählt“ an einem leeren Platzhalter."""
+        self.speicher.json_schreiben("uno", [{"name": "Countdown | Circles", "token": EINZEL_TOKEN, "einzeln": True}])
+        self.netz.verzoegerung = 0.3
+        self.uno.laden()
+        self.assertTrue(warte_bis(lambda: self.uno.overlays, 3000))
+        platzhalter = self.einzel()
+        self.assertFalse(platzhalter.bereit)
+        self.assertTrue(warte_bis(lambda: platzhalter.bereit, 5000))
+        self.assertIs(self.einzel(), platzhalter)
+        self.assertTrue(platzhalter.hat_countdown)
+        self.assertEqual([f.kennung for f in platzhalter.felder], ["Message"])
+        self.assertFalse([m for m in self.meldungen if m[1]])
+
+    def test_uno_antwortet_gar_nicht(self):
+        """Zeitüberschreitung: nach dem Zeitlimit „nicht erreichbar“ – nicht ewig warten."""
+        import time
+        self.hinzufuegen(EINZEL_ADRESSE_TEXT)
+        o = self.einzel()
+        self.netz.verzoegerung = 4  # länger als das Zeitlimit (2 s in den Tests)
+        ergebnis = []
+        start = time.monotonic()
+        self.uno.umschalten(o, lambda ok, f: ergebnis.append((ok, f)))
+        self.assertTrue(warte_bis(lambda: ergebnis, 3500))
+        self.assertLess(time.monotonic() - start, 3.0)
+        self.assertEqual(ergebnis[0], (False, ""))
+        self.assertIn((self.E.texte.meldung_uno_kein_internet, True), self.meldungen)
+        self.assertFalse(o.beschaeftigt)  # Knopf wieder frei
+        self.netz.verzoegerung = 0
+
+    def test_invalid_command_still_ausgrauen(self):
+        """400 „Invalid command“ bei einer Funktion: still ausgrauen, keine rote Meldung."""
+        from openregie.uno.verwaltung import TEXTE
+        self.hinzufuegen()
+        o = self.uno.overlays[f"{UNO_TOKEN}/ov-1"]
+        self.netz.unbekannte_befehle.add("GetOverlayContent")
+        ergebnis = []
+        self.uno.felder_laden(o, lambda ok, f: ergebnis.append((ok, f)))
+        self.assertTrue(warte_bis(lambda: ergebnis, 3000))
+        self.assertEqual(ergebnis[0], (False, ""))
+        self.assertIn(TEXTE, o.nicht_unterstuetzt)
+        self.assertFalse([m for m in self.meldungen if m[1]])
+        self.assertIsNot(o.projekt.erreichbar, False)  # Uno ist ja erreichbar
+
+    def test_adresse_ungueltig_spaeter(self):
+        """Token wird bei Uno gelöscht: „Adresse ungültig“, einmal, Lampen grau."""
+        from openregie.oberflaeche.overlay_bereich import AUS, lampen_zustand
+        self.uno.laden()
+        self.hinzufuegen(EINZEL_ADRESSE_TEXT)
+        self.netz.einzel_tokens.clear()
+        self.assertTrue(warte_bis(lambda: (self.E.texte.meldung_uno_adresse_unbekannt, True) in self.meldungen, 3000))
+        warte(2200)
+        self.assertEqual(self.meldungen.count((self.E.texte.meldung_uno_adresse_unbekannt, True)), 1)
+        self.assertEqual(lampen_zustand(self.einzel()), AUS)
 
     def test_beide_arten_zusammen(self):
         self.uno.laden()

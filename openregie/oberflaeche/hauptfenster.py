@@ -234,6 +234,10 @@ class Hauptfenster(QMainWindow):
 
     def _liste_geaendert(self) -> None:
         """Ohne Uno-Projekt: gleich die Einrichtung zeigen. Sonst das erste Overlay wählen."""
+        gezeigt = self.overlay_bedienfeld.overlay
+        if gezeigt is not None and self.uno.overlays.get(gezeigt.schluessel) not in (None, gezeigt):
+            # Sicherheitsnetz: „Ausgewählt“ darf nie an einem alten Overlay hängen bleiben
+            self.overlay_bedienfeld.zeigen(self.uno.overlays[gezeigt.schluessel])
         if self.bedienfelder.currentWidget() is self.uno_einrichtung and self._einrichtung_vom_nutzer:
             return  # Kevin ist gerade beim Einrichten – dort bleiben
         if self.bibliothek.gewaehlter is None:

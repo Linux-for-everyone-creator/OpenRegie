@@ -36,6 +36,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 import time
 
 from ..geheimspeicher import Geheimspeicher, SpeicherFehler
+from ..hintergrund import Hintergrund
 from ..netz import Netz
 from . import einzel
 from .einzel import Bauplan, Feld
@@ -215,6 +216,13 @@ class Overlay:
     dauer: int | None = None  # Countdown-Dauer in Sekunden
     stand_ms: float = 0.0  # wann Timer/Dauer zuletzt von Uno kamen (für die Anzeige)
     bild_daten: bytes | None = None  # geladenes Vorschaubild (b"" = keins)
+    # Funktionen, die dieses Uno nicht kann (Uno sagt „Invalid command“): werden still ausgegraut
+    nicht_unterstuetzt: set = field(default_factory=set)
+
+    @property
+    def bereit(self) -> bool:
+        """False, solange ein Einzel-Uno noch nicht von Uno gelesen wurde (z. B. direkt nach dem Start)."""
+        return not (self.projekt.einzeln and self.bauplan is None)
 
     @property
     def hat_countdown(self) -> bool:
@@ -235,6 +243,11 @@ class UnoProjekt:
         self.token = token
         self.einzeln = einzeln  # True = Einzel-Uno (genau ein Overlay, kennt kein „GetOverlays“)
         self.erreichbar: bool | None = None
+        self.meldung = ""  # warum nicht erreichbar (für Menschen)
+
+
+# Funktionen eines Overlays (für „nicht unterstützt“)
+EIN_AUS, TEXTE, COUNTDOWN = "ein_aus", "texte", "countdown"
 
 
 class UnoVerwaltung(QObject):
@@ -249,7 +262,9 @@ class UnoVerwaltung(QObject):
         self._E = einstellungen_uno
         self._texte = texte
         self._speicher = speicher
-        self._netz = netz or Netz(self)
+        self._netz = netz or Netz(self, zeitlimit_ms=int(float(self._E.zeitlimit_sekunden) * 1000))
+        self._hintergrund = Hintergrund(self, "openregie-uno-speicher")
+        self._letzte_meldung: tuple[str, bool] | None = None
         self.projekte: list[UnoProjekt] = []
         self.overlays: dict[str, Overlay] = {}  # schluessel -> Overlay (Reihenfolge bleibt)
         self.speicher_fehler = False
@@ -263,30 +278,45 @@ class UnoVerwaltung(QObject):
     #  Projekte (gespeichert im Passwortspeicher)
     # ------------------------------------------------------------------
     def laden(self) -> None:
-        try:
-            gespeichert = self._speicher.json_lesen(SPEICHER_SCHLUESSEL, []) or []
-            self.speicher_fehler = False
-        except SpeicherFehler as fehler:
+        """Gespeicherte Projekte aus dem Passwortspeicher holen – im Hintergrund (der kann warten)."""
+        self._hintergrund.ausfuehren(lambda: self._speicher.json_lesen(SPEICHER_SCHLUESSEL, []), self._geladen)
+
+    def _geladen(self, gespeichert, fehler) -> None:
+        if isinstance(fehler, SpeicherFehler):
             log.error("Passwortspeicher nicht erreichbar: %s", fehler)
             self.speicher_fehler = True
-            self.meldung.emit(self._texte.meldung_speicher_fehler, True)
+            self._melden(self._texte.meldung_speicher_fehler, True)
             gespeichert = []
+        elif fehler is not None:
+            raise fehler
+        else:
+            self.speicher_fehler = False
+        gespeichert = gespeichert or []
         self.projekte = [UnoProjekt(str(p.get("name") or ""), str(p["token"]), bool(p.get("einzeln", False)))
                          for p in gespeichert if isinstance(p, dict) and p.get("token")]
         log.info("%d Uno-Projekt(e) geladen", len(self.projekte))
         self.auffrischen()
         self._abfrage.start()
 
-    def _speichern(self) -> bool:
-        try:
-            self._speicher.json_schreiben(SPEICHER_SCHLUESSEL,
-                                          [{"name": p.name, "token": p.token, "einzeln": p.einzeln}
-                                           for p in self.projekte])
-            return True
-        except SpeicherFehler as fehler:
-            log.error("Speichern im Passwortspeicher fehlgeschlagen: %s", fehler)
-            self.meldung.emit(self._texte.meldung_speicher_fehler, True)
-            return False
+    def _speichern(self, fertig=None) -> None:
+        """Projekte im Passwortspeicher sichern – im Hintergrund. fertig(erfolg)."""
+        stand = [{"name": p.name, "token": p.token, "einzeln": p.einzeln} for p in self.projekte]
+
+        def gespeichert(_ergebnis, fehler):
+            if fehler is not None:
+                log.error("Speichern im Passwortspeicher fehlgeschlagen: %s", fehler)
+                self._melden(self._texte.meldung_speicher_fehler, True)
+            if fertig:
+                fertig(fehler is None)
+
+        self._hintergrund.ausfuehren(lambda: self._speicher.json_schreiben(SPEICHER_SCHLUESSEL, stand), gespeichert)
+
+    def _melden(self, text: str, fehler: bool) -> None:
+        """Meldung unter der Bibliothek – dieselbe nie zweimal hintereinander."""
+        if self._letzte_meldung == (text, fehler):
+            return
+        self._letzte_meldung = (text, fehler)
+        self.meldung.emit(text, fehler)
 
     def projekt_hinzufuegen(self, eingefuegter_text: str, fertig) -> None:
         """Prüft die Adresse bei Uno und speichert sie. fertig(erfolg, meldung)."""
@@ -299,27 +329,41 @@ class UnoVerwaltung(QObject):
             return
         projekt = UnoProjekt(self._texte.uno_projekt_name.format(nummer=len(self.projekte) + 1), token)
 
-        def speichern() -> bool:
+        def speichern(danach) -> None:
+            if any(p.token == token for p in self.projekte):
+                fertig(False, self._texte.meldung_uno_schon_da)  # zweimal schnell geklickt
+                return
             projekt.erreichbar = True
             self.projekte.append(projekt)
-            if self._speichern():
-                return True
-            self.projekte.remove(projekt)
-            fertig(False, self._texte.meldung_speicher_fehler)
-            return False
 
-        def einzel_fertig(overlay, fehler):
+            def gespeichert(ok):
+                if ok:
+                    danach()
+                else:
+                    if projekt in self.projekte:
+                        self.projekte.remove(projekt)
+                    fertig(False, self._texte.meldung_speicher_fehler)
+
+            self._speichern(gespeichert)
+
+        def einzel_fertig(overlay, fehler, _art=""):
             if overlay is None:
                 fertig(False, fehler)
-            elif speichern():
+                return
+
+            def eintragen():
                 self._einzel_eintragen(overlay)
                 fertig(True, self._texte.meldung_uno_einzel_ok)
 
+            speichern(eintragen)
+
         def antwort(ok, payload, fehler, art):
             if ok:
-                if speichern():
+                def eintragen():
                     self._overlays_uebernehmen(projekt, payload)
                     fertig(True, self._texte.meldung_uno_projekt_ok.format(anzahl=len(overlays_lesen(payload))))
+
+                speichern(eintragen)
             elif art == UNBEKANNTER_BEFEHL:
                 # Adresse gültig, aber ein Einzel-Uno (kennt „GetOverlays“ nicht)
                 projekt.einzeln = True
@@ -342,13 +386,17 @@ class UnoVerwaltung(QObject):
     # ------------------------------------------------------------------
     #  Einzel-Unos (Singular-Schnittstelle)
     # ------------------------------------------------------------------
-    def _einzel_einlesen(self, projekt: UnoProjekt, fertig) -> None:
-        """Name, Bauplan und Zustand holen (3 Anfragen). fertig(overlay | None, fehlertext)."""
-        overlay = Overlay(projekt, "", projekt.name)
+    def _einzel_einlesen(self, projekt: UnoProjekt, fertig, overlay: Overlay | None = None) -> None:
+        """Name, Bauplan und Zustand holen (3 Anfragen). fertig(overlay | None, fehlertext, fehlerart).
 
-        def info(ok, daten, fehler, _art):
+        Ist schon ein (leeres) Overlay da, wird GENAU DIESES gefüllt – nie ein neues angelegt.
+        Sonst würde z. B. der Bereich „Ausgewählt“ an einem leeren Platzhalter hängen bleiben.
+        """
+        overlay = overlay or Overlay(projekt, "", projekt.name)
+
+        def info(ok, daten, fehler, art):
             if not ok:
-                fertig(None, fehler)
+                fertig(None, fehler, art)
                 return
             if isinstance(daten, dict):
                 name = str(daten.get("name") or "").strip()
@@ -361,38 +409,39 @@ class UnoVerwaltung(QObject):
                     overlay.vorschaubild = bild
             self._singular(projekt, "GET", "/model", None, bauplan)
 
-        def bauplan(ok, daten, fehler, _art):
+        def bauplan(ok, daten, fehler, art):
             if not ok:
-                fertig(None, fehler)
+                fertig(None, fehler, art)
                 return
-            overlay.bauplan = einzel.bauplan_lesen(daten)
-            if overlay.bauplan is None:
+            plan = einzel.bauplan_lesen(daten)
+            if plan is None:
                 log.warning("Bauplan von Uno nicht verständlich: %.300s", daten)
-                fertig(None, self._texte.meldung_uno_fehler)
+                fertig(None, self._texte.meldung_uno_fehler, SONSTIGER_FEHLER)
                 return
-            self._singular(projekt, "GET", "/control", None, zustand)
+            self._singular(projekt, "GET", "/control", None, lambda *a: zustand(plan, *a))
 
-        def zustand(ok, daten, fehler, _art):
+        def zustand(plan, ok, daten, fehler, art):
             if not ok:
-                fertig(None, fehler)
+                fertig(None, fehler, art)
                 return
+            overlay.bauplan = plan  # erst jetzt: vorher gilt das Overlay als „wird geladen“
             self._zustand_uebernehmen(overlay, daten)
-            fertig(overlay, "")
+            self.overlay_geaendert.emit(overlay)
+            fertig(overlay, "", "")
 
         self._singular(projekt, "GET", "", None, info)
 
     def _einzel_eintragen(self, overlay: Overlay) -> None:
         schluessel = overlay.schluessel
+        anders = False
         for s in [s for s, o in self.overlays.items() if o.projekt is overlay.projekt and s != schluessel]:
             del self.overlays[s]
-        alt = self.overlays.get(schluessel)
-        if alt is not None and alt is not overlay:
-            # Platzhalter (z. B. beim Start ohne Internet) durch das echte Overlay ersetzen,
-            # dabei die Reihenfolge behalten
-            self.overlays = {s: (overlay if s == schluessel else o) for s, o in self.overlays.items()}
-        else:
+            anders = True
+        if self.overlays.get(schluessel) is not overlay:
             self.overlays[schluessel] = overlay
-        self.liste_geaendert.emit()
+            anders = True
+        if anders:
+            self.liste_geaendert.emit()
 
     def _zustand_uebernehmen(self, overlay: Overlay, control) -> None:
         """GET …/control → Tally, Countdown und Texte des Overlays."""
@@ -432,10 +481,11 @@ class UnoVerwaltung(QObject):
             if projekt.einzeln:
                 overlay = self._einzel_overlay(projekt)
                 if overlay.bauplan is None:
-                    self._einzel_einlesen(projekt, lambda o, f, p=projekt: self._einzel_neu(p, o, f, still))
+                    self._einzel_einlesen(projekt, lambda o, f, a, p=projekt: self._einzel_neu(p, o, f, a, still),
+                                          overlay)
                 else:
                     self._singular(projekt, "GET", "/control", None,
-                                   lambda ok, d, f, _a, p=projekt, o=overlay: self._einzel_stand(p, o, ok, d, f, still))
+                                   lambda ok, d, f, a, p=projekt, o=overlay: self._einzel_stand(p, o, ok, d, f, a, still))
                 continue
 
             def antwort(ok, payload, fehler, art, p=projekt):
@@ -445,39 +495,70 @@ class UnoVerwaltung(QObject):
                     p.einzeln = True
                     for s in [s for s, o in self.overlays.items() if o.projekt is p]:
                         del self.overlays[s]
-                    self._einzel_overlay(p)
-                    self._einzel_einlesen(p, lambda o, f: self._einzel_neu(p, o, f, still, speichern=True))
+                    platzhalter = self._einzel_overlay(p)
+                    self._einzel_einlesen(p, lambda o, f, a: self._einzel_neu(p, o, f, a, still, speichern=True),
+                                          platzhalter)
                     return
                 self._laedt -= 1
                 if ok:
                     self._overlays_uebernehmen(p, payload)
-                self._erreichbar(p, ok, fehler, still)
+                self._erreichbar(p, ok, fehler, art)
 
             self._befehl(projekt, {"command": "GetOverlays"}, antwort)
 
-    def _einzel_neu(self, projekt, overlay, fehler, still, speichern=False) -> None:
+    def _einzel_neu(self, projekt, overlay, fehler, art, still, speichern=False) -> None:
         self._laedt -= 1
         if overlay is not None:
             self._einzel_eintragen(overlay)
-            if speichern:
+            if speichern or overlay.name != projekt.name:
                 self._speichern()
-        self._erreichbar(projekt, overlay is not None, fehler, still)
+        self._erreichbar(projekt, overlay is not None, fehler, art)
 
-    def _einzel_stand(self, projekt, overlay, ok, daten, fehler, still) -> None:
+    def _einzel_stand(self, projekt, overlay, ok, daten, fehler, art, still) -> None:
         self._laedt -= 1
         if ok:
             self._zustand_uebernehmen(overlay, daten)
-        self._erreichbar(projekt, ok, fehler, still)
+        self._erreichbar(projekt, ok, fehler, art)
 
-    def _erreichbar(self, projekt: UnoProjekt, ok: bool, fehler: str, still: bool) -> None:
-        war = projekt.erreichbar
+    def _erreichbar(self, projekt: UnoProjekt, ok: bool, fehler: str, art: str = "") -> None:
+        """Merkt sich, ob ein Projekt erreichbar ist, und meldet es EINMAL unter der Bibliothek.
+
+        „Invalid command“ heißt: Uno ist da, kann nur diesen Befehl nicht – das ist kein Ausfall.
+        """
+        if not ok and art == UNBEKANNTER_BEFEHL:
+            ok = True
+        war, alte_meldung = projekt.erreichbar, projekt.meldung
         projekt.erreichbar = ok
-        if ok:
-            if war is False:
-                self.meldung.emit("", False)
-        elif not still or war is not False:
+        projekt.meldung = "" if ok else fehler
+        if (war, alte_meldung) == (ok, projekt.meldung):
+            return
+        if not ok:
             log.warning("Uno-Projekt %s nicht erreichbar: %s", projekt.name, fehler)
-            self.meldung.emit(fehler, True)
+        for o in self.overlays.values():
+            if o.projekt is projekt:
+                self.overlay_geaendert.emit(o)  # Lampen grau bzw. wieder grün
+        meldungen = [p.meldung for p in self.projekte if p.meldung]
+        if meldungen:
+            self._melden(meldungen[0], True)
+        elif self._letzte_meldung and self._letzte_meldung[1]:
+            self._melden("", False)
+
+    def _aktion_fehlgeschlagen(self, overlay: Overlay, funktion: str, fehler: str, art: str) -> str:
+        """Nach einem fehlgeschlagenen Klick: Was soll im Bedienfeld stehen? ("" = nichts)
+
+        - kein Internet / Zeitüberschreitung, Adresse ungültig: steht EINMAL unter der Bibliothek
+        - „Invalid command“: Funktion still ausgrauen, keine rote Meldung
+        - sonstiger Fehler (z. B. Uno-Störung): Meldung im Bedienfeld
+        """
+        if art == UNBEKANNTER_BEFEHL:
+            log.info("Uno-Overlay %s kann „%s“ nicht – wird ausgegraut", overlay.name, funktion)
+            overlay.nicht_unterstuetzt.add(funktion)
+            self.overlay_geaendert.emit(overlay)
+            return ""
+        if art in (KEIN_INTERNET, NICHT_GEFUNDEN):
+            self._erreichbar(overlay.projekt, False, fehler, art)
+            return ""
+        return fehler
 
     def _still_auffrischen(self) -> None:
         if self._laedt == 0:  # nicht stapeln, wenn Uno langsam ist
@@ -524,12 +605,13 @@ class UnoVerwaltung(QObject):
         overlay.beschaeftigt = True
         self.overlay_geaendert.emit(overlay)
 
-        def antwort(ok, _payload, fehler, _art):
+        def antwort(ok, _payload, fehler, art):
             overlay.beschaeftigt = False
             if ok:
                 overlay.sichtbar = sichtbar
+                self._erreichbar(overlay.projekt, True, "")
             else:
-                self.meldung.emit(fehler, True)
+                fehler = self._aktion_fehlgeschlagen(overlay, EIN_AUS, fehler, art)
             self.overlay_geaendert.emit(overlay)
             if fertig:
                 fertig(ok, fehler)
@@ -548,30 +630,37 @@ class UnoVerwaltung(QObject):
                 self._noch_nicht_bereit(fertig)
                 return
 
-            def stand(ok, daten, fehler, _art):
+            def stand(ok, daten, fehler, art):
                 if ok:
                     self._zustand_uebernehmen(overlay, daten)
+                    self._erreichbar(overlay.projekt, True, "")
+                else:
+                    fehler = self._aktion_fehlgeschlagen(overlay, TEXTE, fehler, art)
                 if fertig:
                     fertig(ok, fehler)
 
             self._singular(overlay.projekt, "GET", "/control", None, stand)
             return
 
-        def antwort(ok, payload, fehler, _art):
+        def antwort(ok, payload, fehler, art):
             if ok:
                 overlay.felder = felder_lesen(payload)
                 self.overlay_geaendert.emit(overlay)
+            else:
+                fehler = self._aktion_fehlgeschlagen(overlay, TEXTE, fehler, art)
             if fertig:
                 fertig(ok, fehler)
 
         self._befehl(overlay.projekt, self._overlay_befehl(overlay, "GetOverlayContent"), antwort)
 
     def feld_setzen(self, overlay: Overlay, feld: Feld, text: str, fertig=None) -> None:
-        def antwort(ok, _payload, fehler, _art):
+        def antwort(ok, _payload, fehler, art):
             if ok:
                 for f in overlay.felder:
                     if f.kennung == feld.kennung and f.teil == feld.teil:
                         f.wert = text
+            else:
+                fehler = self._aktion_fehlgeschlagen(overlay, TEXTE, fehler, art)
             if fertig:
                 fertig(ok, fehler)
 
@@ -591,7 +680,7 @@ class UnoVerwaltung(QObject):
             return
         teil, feld = plan.timer
         self._aendern_und_lesen(overlay, [{"subCompositionId": teil, "payload": {feld: {"command": befehl}}}],
-                                fertig)
+                                fertig, COUNTDOWN)
 
     def dauer_setzen(self, overlay: Overlay, sekunden: int, fertig=None) -> None:
         plan = overlay.bauplan
@@ -602,13 +691,14 @@ class UnoVerwaltung(QObject):
         teil, feld = plan.dauer
         overlay.dauer = sekunden  # sofort anzeigen, Uno bestätigt gleich
         self.overlay_geaendert.emit(overlay)
-        self._aendern_und_lesen(overlay, [{"subCompositionId": teil, "payload": {feld: sekunden}}], fertig)
+        self._aendern_und_lesen(overlay, [{"subCompositionId": teil, "payload": {feld: sekunden}}], fertig,
+                                COUNTDOWN)
 
-    def _aendern_und_lesen(self, overlay: Overlay, befehl: list, fertig) -> None:
+    def _aendern_und_lesen(self, overlay: Overlay, befehl: list, fertig, funktion: str) -> None:
         """PATCH schicken, danach den neuen Stand lesen (Uno setzt z. B. die Startzeit selbst)."""
-        def geaendert(ok, _daten, fehler, _art):
+        def geaendert(ok, _daten, fehler, art):
             if not ok:
-                self.meldung.emit(fehler, True)
+                fehler = self._aktion_fehlgeschlagen(overlay, funktion, fehler, art)
                 if fertig:
                     fertig(False, fehler)
                 return
@@ -633,8 +723,9 @@ class UnoVerwaltung(QObject):
         self._netz.anfrage("GET", overlay.vorschaubild, antwort, roh=True)
 
     def _noch_nicht_bereit(self, fertig) -> None:
+        """Overlay wird noch von Uno gelesen: still ablehnen (die Oberfläche zeigt „Wird geladen …“)."""
         if fertig:
-            QTimer.singleShot(0, lambda: fertig(False, self._texte.meldung_uno_kein_internet))
+            QTimer.singleShot(0, lambda: fertig(False, ""))
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -686,3 +777,4 @@ class UnoVerwaltung(QObject):
     def beenden(self) -> None:
         self._abfrage.stop()
         self._netz.alle_abbrechen()
+        self._hintergrund.beenden()

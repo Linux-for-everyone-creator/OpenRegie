@@ -2,6 +2,44 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.1 – Korrektur: Neustart mit Einzel-Uno, Regiepult friert nie ein · 14.11.2026
+
+**Behoben**
+- Nach dem Neustart zeigte „Ausgewählt“ zweimal „Overlays.uno ist gerade nicht erreichbar“,
+  „Zustand unbekannt“, leere Texte – und reagierte auf keinen Knopf mehr.
+  Ursache (im Protokoll und im Nachbau gefunden, NICHT Uno): Beim Start steht das Einzel-Uno erst als
+  Platzhalter in der Liste, bis Uno geantwortet hat. OpenRegie legte danach ein *neues* Overlay an,
+  statt den Platzhalter zu füllen – „Ausgewählt“ hing weiter am leeren Platzhalter, und jeder Klick
+  endete mit der irreführenden Meldung „nicht erreichbar“. Uno hat beim Start keinen einzigen Befehl
+  abgelehnt; die Abfrage beim Start nutzt nur Befehle, die Einzel-Unos verstehen
+  (`GET …`, `…/model`, `…/control` – mit der echten Adresse geprüft).
+  Jetzt wird das Overlay immer an Ort und Stelle gefüllt; zusätzlich ein Sicherheitsnetz im Fenster.
+- Solange ein Uno noch gelesen wird, steht „Wird geladen …“ da und die Knöpfe sind still aus –
+  keine rote Meldung mehr.
+
+**Meldungen sauber getrennt**
+- Keine Verbindung oder Zeitüberschreitung → „Overlays.uno ist gerade nicht erreichbar“.
+- 404 bzw. ungültiger Schlüssel → „Uno kennt diese Adresse nicht“.
+- 400 „Invalid command“ → diese Funktion kann das Uno nicht: wird still ausgegraut, keine rote Meldung.
+- Meldungen zur Erreichbarkeit stehen EINMAL unter der Bibliothek, nicht zusätzlich im Bedienfeld,
+  und dieselbe Meldung kommt nie zweimal hintereinander. Ist Uno wieder da, verschwindet sie von selbst.
+- Ist Uno nicht erreichbar, werden die Lampen der Kacheln grau („Aus“).
+
+**Ein Regiepult friert nie ein**
+- Uno wartet höchstens 5 Sekunden auf eine Antwort (`[uno] zeitlimit_sekunden`), danach „nicht erreichbar“.
+  Internet-Anfragen liefen schon vorher ohne Warten der Oberfläche.
+- Der Passwortspeicher (`secret-tool`) lief bisher im Haupt-Thread und konnte das Fenster bis zu
+  30 Sekunden einfrieren, z. B. wenn KDE-Wallet nach dem Passwort fragt. Jetzt läuft er in einem
+  eigenen Hintergrund-Thread (Uno und Twitch), Speichern in fester Reihenfolge.
+
+**Geprüft**
+- 142 automatische Tests, zweimal ohne Fehler. Neu: Neustart mit eingefügtem Einzel-Uno (genau der
+  gemeldete Ablauf), Uno antwortet gar nicht, Klick während Uno hängt, Passwortspeicher hängt,
+  Uno lehnt Befehle mit 400 ab, Adresse wird ungültig. In allen Fällen wird gemessen, dass die
+  Oberfläche flüssig bleibt (längste Pause unter 0,25 s; Gegenprobe: ein echtes Hängen wird erkannt).
+- Neustart gegen das echte „Countdown | Circles“ (nur lesend): keine Meldung, keine Ablehnung,
+  alles bereit, längste Pause 21 ms. Echter Programmstart: Protokoll ohne Fehler.
+
 ## Build 1.1 – Einzel-Unos richtig steuern, neues Aussehen · 14.11.2026
 
 **Behoben**

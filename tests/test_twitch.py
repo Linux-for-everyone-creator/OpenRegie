@@ -111,7 +111,7 @@ class TwitchTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIs(self.konto.zustand, Anmeldung.ABGEMELDET)
         self.assertIn((self.E.texte.meldung_twitch_neu_anmelden, True), self.meldungen)
-        self.assertNotIn("twitch", self.speicher.daten)
+        self.assertTrue(warte_bis(lambda: "twitch" not in self.speicher.daten, 3000))
 
     def test_abgelehnt(self):
         self.konto.laden()
@@ -157,7 +157,7 @@ class TwitchTest(unittest.TestCase):
         self.anmelden()
         self.konto.abmelden()
         self.assertIs(self.konto.zustand, Anmeldung.ABGEMELDET)
-        self.assertNotIn("twitch", self.speicher.daten)
+        self.assertTrue(warte_bis(lambda: "twitch" not in self.speicher.daten, 3000))
         self.assertTrue(warte_bis(lambda: not self.netz.gueltige_tokens, 3000))  # bei Twitch ungültig gemacht
 
     def test_kein_internet_beim_start(self):

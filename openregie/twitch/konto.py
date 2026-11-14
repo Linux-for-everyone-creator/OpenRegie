@@ -24,6 +24,7 @@ from enum import Enum
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from ..geheimspeicher import Geheimspeicher, SpeicherFehler
+from ..hintergrund import Hintergrund
 from ..netz import Netz
 
 log = logging.getLogger("openregie.twitch")
@@ -54,6 +55,7 @@ class TwitchKonto(QObject):
         self._texte = texte
         self._speicher = speicher
         self._netz = netz or Netz(self)
+        self._hintergrund = Hintergrund(self, "openregie-twitch-speicher")  # Passwortspeicher kann warten
         self._uhr = uhr
         self.client_id = str(self._E.client_id).strip()
         self.zustand = Anmeldung.NICHT_EINGERICHTET if not self.client_id else Anmeldung.ABGEMELDET
@@ -82,12 +84,16 @@ class TwitchKonto(QObject):
         if self.zustand is Anmeldung.NICHT_EINGERICHTET:
             self.anmeldung_geaendert.emit(self.zustand)
             return
-        try:
-            daten = self._speicher.json_lesen(SPEICHER_SCHLUESSEL, {}) or {}
-        except SpeicherFehler as fehler:
+        self._hintergrund.ausfuehren(lambda: self._speicher.json_lesen(SPEICHER_SCHLUESSEL, {}), self._geladen)
+
+    def _geladen(self, daten, fehler) -> None:
+        if fehler is not None:
             log.error("Passwortspeicher nicht erreichbar: %s", fehler)
             self.meldung.emit(self._texte.meldung_speicher_fehler, True)
             daten = {}
+        daten = daten if isinstance(daten, dict) else {}
+        if self.zustand is not Anmeldung.ABGEMELDET:
+            return  # inzwischen schon angemeldet bzw. am Anmelden
         if not daten.get("access_token"):
             self._zustand_setzen(Anmeldung.ABGEMELDET)
             return
@@ -202,10 +208,7 @@ class TwitchKonto(QObject):
                                formular={"client_id": self.client_id, "token": token})
         self._daten = {}
         self.name = self.titel = ""
-        try:
-            self._speicher.loeschen(SPEICHER_SCHLUESSEL)
-        except SpeicherFehler:
-            pass
+        self._loeschen()
         self.anmeldung_abbrechen()
         self._zustand_setzen(Anmeldung.ABGEMELDET)
 
@@ -313,19 +316,28 @@ class TwitchKonto(QObject):
         log.info("Twitch-Anmeldung ungültig – bitte neu anmelden")
         self._daten = {}
         self.name = self.titel = ""
-        try:
-            self._speicher.loeschen(SPEICHER_SCHLUESSEL)
-        except SpeicherFehler:
-            pass
+        self._loeschen()
         self._zustand_setzen(Anmeldung.ABGEMELDET)
         self.meldung.emit(self._texte.meldung_twitch_neu_anmelden, True)
 
     def _speichern(self) -> None:
-        try:
-            self._speicher.json_schreiben(SPEICHER_SCHLUESSEL, self._daten)
-        except SpeicherFehler as fehler:
-            log.error("Twitch-Anmeldung nicht speicherbar: %s", fehler)
-            self.meldung.emit(self._texte.meldung_speicher_fehler, True)
+        stand = dict(self._daten)
+
+        def fertig(_ergebnis, fehler):
+            if fehler is not None:
+                log.error("Twitch-Anmeldung nicht speicherbar: %s", fehler)
+                self.meldung.emit(self._texte.meldung_speicher_fehler, True)
+
+        self._hintergrund.ausfuehren(lambda: self._speicher.json_schreiben(SPEICHER_SCHLUESSEL, stand), fertig)
+
+    def _loeschen(self) -> None:
+        def loeschen():
+            try:
+                self._speicher.loeschen(SPEICHER_SCHLUESSEL)
+            except SpeicherFehler:
+                pass
+
+        self._hintergrund.ausfuehren(loeschen)
 
     def _zustand_setzen(self, zustand: Anmeldung) -> None:
         if zustand is not self.zustand:
@@ -336,3 +348,4 @@ class TwitchKonto(QObject):
     def beenden(self) -> None:
         self._nachfragen.stop()
         self._netz.alle_abbrechen()
+        self._hintergrund.beenden()

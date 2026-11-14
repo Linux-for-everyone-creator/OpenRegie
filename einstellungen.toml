@@ -57,6 +57,9 @@ basisadresse = "https://app.overlays.uno"
 # Uno erlaubt nur 10.000 Anfragen am Tag – darum nicht zu oft (20 s ≈ 4.300 am Tag pro Projekt).
 # Nach jedem eigenen Klick stimmt das Tally-Licht sofort.
 abfrage_sekunden = 20
+# So lange wartet OpenRegie höchstens auf eine Antwort von Uno (Sekunden). Danach gilt Uno
+# als „nicht erreichbar“ – das Regiepult bleibt dabei immer bedienbar.
+zeitlimit_sekunden = 5
 # Längste Countdown-Dauer, die man einstellen kann (Sekunden). 35999 = 9:59:59.
 countdown_hoechstdauer_sekunden = 35999
 

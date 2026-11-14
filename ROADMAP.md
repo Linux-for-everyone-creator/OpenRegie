@@ -5,6 +5,7 @@ im Hintergrund und wird über den OBS-WebSocket gesteuert. Alle Grafiken im Stre
 
 Grundregeln für alle Builds: große Knöpfe, einfacher Klick, kein Ziehen, kein Rechtsklick,
 keine Tastenkombination als einziger Weg, wenig Tippen, alle Texte auf Deutsch.
+**Ein Regiepult friert nie ein:** nichts, was warten kann, läuft im Haupt-Thread der Oberfläche.
 OpenRegie wird Open Source: keine Geheimnisse im Code, Zugangsdaten nur im Passwortspeicher des Systems.
 
 ## Version 1
@@ -38,6 +39,8 @@ OpenRegie wird Open Source: keine Geheimnisse im Code, Zugangsdaten nur im Passw
 - [ ] Prüfung mit einem echten Uno-Projekt mit mehreren Overlays (bisher nur Einzel-Uno echt geprüft)
 - [x] Einzel-Uno: Steuerung mit echter Adresse geklärt und eingebaut (Ein/Aus, Tally, Countdown, Dauer, Texte)
 - [x] Neues Aussehen nach dem Entwurf „Hauptfenster“ (Bibliothek mit Kacheln, Lampen, Live-Bild, Ausgewählt)
+- [x] Neustart mit eingefügtem Einzel-Uno repariert, Meldungen sauber getrennt
+- [x] Grundregel „Ein Regiepult friert nie ein“: Zeitlimit für Uno, Passwortspeicher im Hintergrund
 - [ ] Twitch-App anlegen und Client-ID eintragen
 
 ### Build 1.2

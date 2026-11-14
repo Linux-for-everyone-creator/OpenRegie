@@ -84,8 +84,12 @@ class Arbeitsspeicher(Geheimspeicher):
         super().__init__(werkzeug="-")
         self.daten: dict[str, str] = {}
         self.kaputt = False
+        self.verzoegerung = 0.0  # Sekunden – wie ein Passwortspeicher, der nach dem Passwort fragt
 
     def lesen(self, schluessel):
+        if self.verzoegerung:
+            import time
+            time.sleep(self.verzoegerung)
         if self.kaputt:
             raise SpeicherFehler("kaputt")
         return self.daten.get(schluessel)

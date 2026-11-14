@@ -20,7 +20,7 @@ from openregie.oberflaeche.overlay_bereich import AUS, BEREIT, LIVE
 from .falsches_internet import (CONTENT, EINZEL_ADRESSE_TEXT, EINZEL_TOKEN, UNO_ADRESSE_TEXT, UNO_TOKEN,
                                 FalschesInternet)
 from .falsches_obs import FalschesObs
-from .hilfen import app, internet_einstellungen, obs_einstellungen, warte, warte_bis, zugang
+from .hilfen import app, groesste_pause_ms, internet_einstellungen, obs_einstellungen, warte, warte_bis, zugang
 
 
 def klick(k):
@@ -292,6 +292,122 @@ class EinzelUnoFensterTest(Grundlage):
             self.assertTrue(k.isVisible(), k.text())
             self.assertLessEqual(k.mapTo(self.b, k.rect().topRight()).x(), rechts, k.text())
             self.assertGreaterEqual(k.height(), self.E.groessen.knopf_hoehe)
+
+
+class NeustartTest(Grundlage):
+    """Fehler aus Build 1.1: Neustart mit schon eingefügtem Einzel-Uno.
+    „Ausgewählt“ hing an einem leeren Platzhalter, zeigte „nicht erreichbar“ und reagierte nicht."""
+    mit_uno = False
+
+    def setUp(self):
+        app()
+        self.netz = FalschesInternet()
+        self.E = internet_einstellungen(self.netz)
+        self.speicher = Arbeitsspeicher()
+        # wie nach dem ersten Einfügen gespeichert
+        self.speicher.json_schreiben("uno", [{"name": "Countdown | Circles", "token": EINZEL_TOKEN, "einzeln": True}])
+        self.obs = FalschesObs(passwort="geheim")
+        oe, _ = obs_einstellungen(szenensammlung="")
+        self.v = ObsVerbindung(oe, self.E.texte, zugang_finden=zugang(self.obs.port), obs_laeuft=lambda: True)
+        self.m = ObsMotor(oe, self.E.texte, self.v, obs_laeuft=lambda: True)
+        self.vs = Vorschau(self.v, self.E.vorschau)
+        self.uno = UnoVerwaltung(self.E.uno, self.E.texte, self.speicher)
+        self.twitch = TwitchKonto(self.E.twitch, self.E.texte, self.speicher)
+        self.f = Hauptfenster(self.E, self.v, self.vs, self.m, self.uno, self.twitch)
+        self.geoeffnet = []
+        self.f.twitch_bereich._browser_oeffnen = self.geoeffnet.append
+        self.f.resize(1600, 900)
+        self.f.show()
+        self.b = self.f.overlay_bedienfeld
+        self.rote = []
+        self.uno.meldung.connect(lambda t, fehler: self.rote.append(t) if fehler else None)
+
+    def starten(self):
+        # gleiche Reihenfolge wie im Programm (app.py): erst Fenster, dann laden
+        self.uno.laden()
+        self.twitch.laden()
+
+    def test_neustart_alles_bedienbar(self):
+        self.netz.verzoegerung = 0.3  # Uno antwortet etwas langsam, wie im echten Internet
+        self.starten()
+        self.assertTrue(warte_bis(lambda: self.b.overlay is not None, 3000))
+        # während Uno gelesen wird: „Wird geladen …“, Knöpfe still aus, KEINE rote Meldung
+        self.assertEqual(self.b.tally_text.text(), self.E.texte.overlay_texte_laden)
+        self.assertFalse(self.b.einblenden.isEnabled())
+        self.assertTrue(warte_bis(lambda: self.b.overlay.bereit, 5000))
+        self.assertIs(self.b.overlay, self.uno.overlays[f"{EINZEL_TOKEN}/"])  # nicht am Platzhalter hängen
+        self.assertEqual(self.b.tally_text.text(), self.E.texte.overlay_ausgeblendet)
+        self.assertTrue(warte_bis(lambda: list(self.b.eingaben) == [(CONTENT, "Message")], 3000))
+        self.assertTrue(self.b.countdown.isVisible())
+        self.assertEqual(self.rote, [])
+        self.assertFalse(self.b.meldung_schalter.isVisible())
+        self.assertFalse(self.b.meldung_texte.isVisible())
+        # alles bedienbar
+        self.netz.verzoegerung = 0
+        klick(self.b.einblenden)
+        self.assertTrue(warte_bis(lambda: self.netz.einzel.komplett_sichtbar(), 3000))
+        klick(self.b.ausblenden)
+        self.assertTrue(warte_bis(lambda: self.netz.einzel.ganz_aus(), 3000))
+        klick(self.b.knopf_texte_neu)
+        self.b.eingabe("Message").setText("Gleich!")
+        klick(self.b.knopf_uebernehmen)
+        self.assertTrue(warte_bis(lambda: self.netz.einzel.werte[CONTENT]["Message"] == "Gleich!", 3000))
+        klick(self.b.start)
+        self.assertTrue(warte_bis(lambda: self.netz.einzel.werte[CONTENT]["Timer"]["isRunning"], 3000))
+
+    def test_uno_antwortet_gar_nicht_oberflaeche_bleibt_fluessig(self):
+        self.netz.verzoegerung = 10  # Uno hängt
+        self.starten()
+        pause = groesste_pause_ms(3000)
+        self.assertLess(pause, 250, f"Oberfläche hing {pause:.0f} ms")
+        # Twitch-Bereich und Bibliothek reagieren währenddessen
+        klick(self.f.bibliothek.knopf_einrichten)
+        self.assertIs(self.f.bedienfelder.currentWidget(), self.f.uno_einrichtung)
+        klick(self.f.uno_einrichtung.zurueck)
+        # nach dem Zeitlimit: EINE Meldung „nicht erreichbar“, „Ausgewählt“ still ausgegraut
+        self.assertTrue(warte_bis(lambda: self.rote, 4000))
+        self.assertEqual(self.rote, [self.E.texte.meldung_uno_kein_internet])
+        self.assertEqual(self.f.bibliothek.meldung.text(), self.E.texte.meldung_uno_kein_internet)
+        self.assertFalse(self.b.meldung_schalter.isVisible())
+        self.assertFalse(self.b.einblenden.isEnabled())
+        # Uno ist wieder da → von selbst bereit, Meldung weg
+        self.netz.verzoegerung = 0
+        self.assertTrue(warte_bis(lambda: self.b.overlay is not None and self.b.overlay.bereit, 6000))
+        self.assertTrue(warte_bis(lambda: not self.f.bibliothek.meldung.isVisible(), 3000))
+        self.assertTrue(self.b.einblenden.isEnabled())
+
+    def test_klick_waehrend_uno_haengt(self):
+        self.starten()
+        self.assertTrue(warte_bis(lambda: self.b.overlay is not None and self.b.overlay.bereit, 3000))
+        self.netz.verzoegerung = 10
+        klick(self.b.einblenden)
+        self.assertFalse(self.b.einblenden.isEnabled())  # kein Doppelklick, solange es läuft
+        pause = groesste_pause_ms(2500, lambda: self.b.einblenden.isEnabled())
+        self.assertLess(pause, 250, f"Oberfläche hing {pause:.0f} ms")
+        self.assertTrue(warte_bis(lambda: self.b.einblenden.isEnabled(), 2000))  # nach Zeitlimit wieder frei
+        self.assertEqual(self.rote, [self.E.texte.meldung_uno_kein_internet])
+        self.assertFalse(self.b.meldung_schalter.isVisible())  # nicht doppelt
+        self.netz.verzoegerung = 0
+
+    def test_passwortspeicher_haengt(self):
+        """Der Passwortspeicher fragt nach dem Passwort (dauert): das Fenster bleibt flüssig."""
+        self.speicher.verzoegerung = 2
+        self.starten()
+        pause = groesste_pause_ms(1500)
+        self.assertLess(pause, 250, f"Oberfläche hing {pause:.0f} ms")
+        self.assertTrue(warte_bis(lambda: self.b.overlay is not None and self.b.overlay.bereit, 6000))
+
+    def test_einzel_uno_kann_befehl_nicht(self):
+        """400 „Invalid command“ beim Lesen: still, keine rote Meldung, Rest bedienbar."""
+        self.speicher.json_schreiben("uno", [{"name": "Uno-Projekt 1", "token": UNO_TOKEN}])
+        self.netz.unbekannte_befehle.add("GetOverlayContent")
+        self.starten()
+        self.assertTrue(warte_bis(lambda: self.b.overlay is not None, 3000))
+        self.assertTrue(warte_bis(lambda: self.b.texte.isHidden(), 3000))  # Texte still ausgegraut
+        self.assertEqual(self.rote, [])
+        self.assertFalse(self.b.meldung_texte.isVisible())
+        klick(self.b.einblenden)
+        self.assertTrue(warte_bis(lambda: self.netz.overlays[0]["visible"], 3000))
 
 
 class TwitchFensterTest(Grundlage):

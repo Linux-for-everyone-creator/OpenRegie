@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QAbstractButton, QButtonGroup, QFrame, QGridLayou
                                QLineEdit, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from ..uno import einzel
-from ..uno.verwaltung import Overlay, UnoProjekt, UnoVerwaltung
+from ..uno.verwaltung import COUNTDOWN, EIN_AUS, TEXTE, Overlay, UnoProjekt, UnoVerwaltung
 from .bausteine import Lampe, beschriftung, knopf
 
 LIVE, BEREIT, AUS = "live", "bereit", "aus"
@@ -393,13 +393,17 @@ class OverlayBedienfeld(QWidget):
         lay.addWidget(self.countdown)
 
         # --- Texte -----------------------------------------------------------
+        self.texte = QWidget()  # wird ausgeblendet, wenn das Uno keine Texte kann
+        tx = QVBoxLayout(self.texte)
+        tx.setContentsMargins(0, 0, 0, 0)
+        tx.setSpacing(g.abstand)
         self.texte_kopf = beschriftung(t.overlay_texte, "kleinueberschrift")
-        lay.addWidget(self.texte_kopf)
+        tx.addWidget(self.texte_kopf)
         innen = QWidget()
         self._felder_lay = QVBoxLayout(innen)
         self._felder_lay.setContentsMargins(0, 0, 8, 0)
         self._felder_lay.setSpacing(6)
-        lay.addWidget(_scrollflaeche(innen), 1)
+        tx.addWidget(_scrollflaeche(innen), 1)
         texte_reihe = QHBoxLayout()
         texte_reihe.setSpacing(g.abstand // 2)
         self.knopf_uebernehmen = knopf(t.knopf_texte_uebernehmen)
@@ -408,9 +412,11 @@ class OverlayBedienfeld(QWidget):
         self.knopf_texte_neu = knopf(t.knopf_texte_neu)
         self.knopf_texte_neu.clicked.connect(self.texte_laden)
         texte_reihe.addWidget(self.knopf_texte_neu, 1)
-        lay.addLayout(texte_reihe)
+        tx.addLayout(texte_reihe)
         self.meldung_texte = meldung()
-        lay.addWidget(self.meldung_texte)
+        tx.addWidget(self.meldung_texte)
+        lay.addWidget(self.texte, 1)
+        self._felder_da = False  # sind die Eingabefelder schon aufgebaut?
 
         # --- Einblenden / Ausblenden (unten, groß) ----------------------------
         self.meldung_schalter = meldung()
@@ -436,9 +442,12 @@ class OverlayBedienfeld(QWidget):
         self.overlay = overlay
         self.meldung_schalter.zeigen("")
         self.meldung_texte.zeigen("")
-        self._zustand_zeigen()
         self._felder_aufbauen([], self.E.texte.overlay_texte_laden)
-        self.texte_laden()
+        self._felder_da = False
+        self._zustand_zeigen()
+        if overlay.bereit:
+            self.texte_laden()
+        # sonst: Uno wird gerade gelesen – sobald es fertig ist, kommt overlay_geaendert
 
     def _zustand_zeigen(self) -> None:
         o, t, f = self.overlay, self.E.texte, self.E.farben
@@ -447,15 +456,29 @@ class OverlayBedienfeld(QWidget):
         self.name.setText(o.name)
         z = lampen_zustand(o)
         self.tally.farbe_setzen(lampen_farbe(self.E, z))
+        if not o.bereit:
+            # Uno wird noch gelesen (z. B. direkt nach dem Start): alles still ausgegraut
+            self.tally_text.setText(t.overlay_texte_laden)
+            self.tally_text.setStyleSheet(f"color: {f.text_gedimmt};")
+            for k in (self.einblenden, self.ausblenden, self.knopf_uebernehmen, self.knopf_texte_neu):
+                k.setEnabled(False)
+            self.countdown.setVisible(False)
+            return
         if o.sichtbar:
             self.tally_text.setText(t.overlay_im_stream)
             self.tally_text.setStyleSheet(f"color: {f.tally_an};")
         else:
             self.tally_text.setText(t.overlay_ausgeblendet if o.sichtbar is False else t.overlay_unbekannt)
             self.tally_text.setStyleSheet(f"color: {f.text_gedimmt};")
-        self.einblenden.setEnabled(not o.beschaeftigt and o.sichtbar is not True)
-        self.ausblenden.setEnabled(not o.beschaeftigt and o.sichtbar is not False)
+        kann_ein_aus = EIN_AUS not in o.nicht_unterstuetzt
+        self.einblenden.setEnabled(kann_ein_aus and not o.beschaeftigt and o.sichtbar is not True)
+        self.ausblenden.setEnabled(kann_ein_aus and not o.beschaeftigt and o.sichtbar is not False)
         self.countdown.setVisible(o.hat_countdown)
+        for k in (self.start, self.pause, self.zurueck):
+            k.setVisible(COUNTDOWN not in o.nicht_unterstuetzt)
+        self.texte.setVisible(TEXTE not in o.nicht_unterstuetzt)
+        self.knopf_texte_neu.setEnabled(True)
+        self.knopf_uebernehmen.setEnabled(bool(self.eingaben))
         hat_dauer = bool(o.bauplan and o.bauplan.dauer)
         for k in self.dauer_knoepfe.values():
             k.setEnabled(hat_dauer)
@@ -481,8 +504,12 @@ class OverlayBedienfeld(QWidget):
         self.pause.setEnabled(laeuft)
 
     def _overlay_geaendert(self, overlay: Overlay) -> None:
-        if overlay is self.overlay:
-            self._zustand_zeigen()
+        if overlay is not self.overlay:
+            return
+        if overlay.bereit and not self._felder_da and overlay.projekt.einzeln:
+            # gerade fertig gelesen: Texte gleich anzeigen (sie kamen mit dem Zustand)
+            self._felder_aufbauen(overlay.felder, self.E.texte.overlay_keine_texte)
+        self._zustand_zeigen()
 
     def _sichtbar(self, sichtbar: bool) -> None:
         if self.overlay is None:
@@ -490,7 +517,7 @@ class OverlayBedienfeld(QWidget):
         self.meldung_schalter.zeigen("")
 
         def fertig(ok, fehler):
-            if not ok:
+            if not ok and fehler:
                 self.meldung_schalter.zeigen(fehler, False)
 
         self.uno.sichtbar_setzen(self.overlay, sichtbar, fertig)
@@ -501,14 +528,14 @@ class OverlayBedienfeld(QWidget):
             return
         self.meldung_schalter.zeigen("")
         self.uno.timer_befehl(self.overlay, befehl,
-                              lambda ok, fehler: None if ok else self.meldung_schalter.zeigen(fehler, False))
+                              lambda ok, fehler: self.meldung_schalter.zeigen(fehler, False) if fehler else None)
 
     def _dauer(self, schritt: int) -> None:
         o = self.overlay
         if o is None or o.dauer is None:
             return
         self.uno.dauer_setzen(o, o.dauer + schritt,
-                              lambda ok, fehler: None if ok else self.meldung_schalter.zeigen(fehler, False))
+                              lambda ok, fehler: self.meldung_schalter.zeigen(fehler, False) if fehler else None)
         self._countdown_zeigen()
 
     # --- Texte ------------------------------------------------------------
@@ -524,14 +551,16 @@ class OverlayBedienfeld(QWidget):
             self.knopf_texte_neu.setEnabled(True)
             if ok:
                 self._felder_aufbauen(overlay.felder, self.E.texte.overlay_keine_texte)
-            else:
+            elif not self._felder_da:
                 self._felder_aufbauen([], "")
+            if not ok and fehler:
                 self.meldung_texte.zeigen(fehler, False)
             self._zustand_zeigen()
 
         self.uno.felder_laden(overlay, fertig)
 
     def _felder_aufbauen(self, felder, leer_text: str) -> None:
+        self._felder_da = bool(felder) or leer_text == self.E.texte.overlay_keine_texte
         _leeren(self._felder_lay)
         self.eingaben, self._felder, self._stand = {}, {}, {}
         for feld in felder:
@@ -573,12 +602,16 @@ class OverlayBedienfeld(QWidget):
             offen["anzahl"] -= 1
             if ok:
                 self._stand[schluessel] = text
-            else:
+            elif fehler:
                 offen["fehler"] = fehler
+            else:
+                offen["still"] = True  # steht schon unter der Bibliothek bzw. wird ausgegraut
             if offen["anzahl"] == 0 and overlay is self.overlay:
                 self.knopf_uebernehmen.setEnabled(True)
                 if offen["fehler"]:
                     self.meldung_texte.zeigen(offen["fehler"], False)
+                elif offen.get("still"):
+                    self.meldung_texte.zeigen("")
                 else:
                     self.meldung_texte.zeigen(t.meldung_texte_ok, True)
 
