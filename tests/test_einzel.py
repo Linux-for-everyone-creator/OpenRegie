@@ -21,6 +21,7 @@ class BauplanTest(unittest.TestCase):
         self.assertEqual(p.haupt, HAUPT)
         self.assertEqual(p.ein_teile, [HAUPT, CONTENT, COUNTDOWN])  # Message steht von Haus aus auf „Out“
         self.assertEqual(p.aktiv_feld, "Active")
+        self.assertEqual(p.zeigen_feld, (CONTENT, "ShowOverlay"))  # Uno-eigener Ein/Aus-Schalter
         self.assertEqual(p.timer, (CONTENT, "Timer"))
         self.assertEqual(p.dauer, (CONTENT, "BeginTime"))
         self.assertEqual(p.textfelder, [(CONTENT, "Message", "Message")])
@@ -28,17 +29,38 @@ class BauplanTest(unittest.TestCase):
     def test_ein_aus_befehl(self):
         ein = einzel.ein_aus_befehl(self.plan, True)
         self.assertEqual(ein, [{"subCompositionId": HAUPT, "state": "In", "payload": {"Active": True}},
-                               {"subCompositionId": CONTENT, "state": "In"},
+                               {"subCompositionId": CONTENT, "state": "In", "payload": {"ShowOverlay": True}},
                                {"subCompositionId": COUNTDOWN, "state": "In"}])
         self.assertTrue(self.s.patch(ein))
-        self.assertTrue(self.s.komplett_sichtbar())
-        self.assertTrue(self.s.patch(einzel.ein_aus_befehl(self.plan, False)))
-        self.assertTrue(self.s.ganz_aus())
+        self.assertEqual(self.s.was_man_sieht(), "komplett")
+        aus = einzel.ein_aus_befehl(self.plan, False)
+        # Ausblenden NUR über den Uno-Schalter: blendet an Ort und Stelle (in der Mitte) aus
+        self.assertEqual(aus, [{"subCompositionId": CONTENT, "payload": {"ShowOverlay": False}}])
+        self.assertTrue(self.s.patch(aus))
+        self.assertEqual(self.s.was_man_sieht(), "nichts")
+        self.assertTrue(self.s.patch(ein))  # und wieder einblenden geht
+        self.assertEqual(self.s.was_man_sieht(), "komplett")
+
+    def test_alter_weg_laesst_kreise_stehen(self):
+        """Gegenprobe zum gemeldeten Fehler: Teile auf „Out“ + Active aus → Kreise bleiben in der Mitte."""
+        self.s.patch(einzel.ein_aus_befehl(self.plan, True))
+        self.s.patch([{"subCompositionId": HAUPT, "state": "Out", "payload": {"Active": False}},
+                      {"subCompositionId": CONTENT, "state": "Out"}, {"subCompositionId": COUNTDOWN, "state": "Out"}])
+        self.assertEqual(self.s.was_man_sieht(), "nur_kreise")
+
+    def test_ohne_uno_schalter_alter_weg(self):
+        model = self.s.model()
+        model[0]["subcompositions"][0]["model"] = [f for f in model[0]["subcompositions"][0]["model"]
+                                                  if f["id"] != "ShowOverlay"]
+        plan = einzel.bauplan_lesen(model)
+        self.assertIsNone(plan.zeigen_feld)
+        aus = einzel.ein_aus_befehl(plan, False)
+        self.assertEqual([e["state"] for e in aus], ["Out", "Out", "Out"])
 
     def test_ohne_active_nur_kreis(self):
         """Gegenprobe zum echten Test: nur die Teile einblenden reicht nicht."""
         self.s.patch([{"subCompositionId": t, "state": "In"} for t in (HAUPT, CONTENT, COUNTDOWN)])
-        self.assertFalse(self.s.komplett_sichtbar())
+        self.assertEqual(self.s.was_man_sieht(), "nur_kreise")
 
     def test_zustand(self):
         teile = einzel.teile_lesen(self.s.control())
@@ -46,6 +68,9 @@ class BauplanTest(unittest.TestCase):
         self.s.zustand[HAUPT] = "In"
         self.assertTrue(einzel.ist_sichtbar(einzel.teile_lesen(self.s.control()), self.plan))
         self.s.zustand[HAUPT] = "Out2"
+        self.assertFalse(einzel.ist_sichtbar(einzel.teile_lesen(self.s.control()), self.plan))
+        self.s.zustand[HAUPT] = "In"
+        self.s.werte[CONTENT]["ShowOverlay"] = False  # Uno-Schalter aus (z. B. in Uno selbst)
         self.assertFalse(einzel.ist_sichtbar(einzel.teile_lesen(self.s.control()), self.plan))
         self.assertEqual(einzel.wert(teile, self.plan.dauer), 300)
         self.assertEqual([f.wert for f in einzel.textfelder_lesen(teile, self.plan)], ["COUNTDOWN END MESSAGE"])

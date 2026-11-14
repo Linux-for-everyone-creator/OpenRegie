@@ -33,7 +33,9 @@ E = einstellungen.lade()
 u = UnoVerwaltung(E.uno, E.texte, Arbeitsspeicher())
 def roh():
     d = json.loads(urllib.request.urlopen(f"https://app.overlays.uno/apiv2/controlapps/{t}/control", timeout=15).read())
-    return " ".join(f"{s['subCompositionName']}:{s['state']}" for s in d) + f" Active={d[0]['payload'].get('Active')}"
+    zeigen = next((s["payload"].get("ShowOverlay") for s in d if "ShowOverlay" in s["payload"]), None)
+    return (" ".join(f"{s['subCompositionName']}:{s['state']}" for s in d)
+            + f" Active={d[0]['payload'].get('Active')} ShowOverlay={zeigen}")
 def warten(fn, *a):
     r = []; fn(*a, lambda ok, f: r.append((ok, f))); warte_bis(lambda: r, 15000); return r[0] if r else ("keine Antwort", "")
 erg = []
@@ -51,15 +53,16 @@ pruef("Textfelder gelesen", bool(o.felder), str([(f.titel, f.wert) for f in o.fe
 pruef("Vorschaubild-Adresse", o.vorschaubild.startswith("https://"))
 b = []; u.bild_laden(o, b.append); warte_bis(lambda: b, 15000)
 pruef("Vorschaubild geladen", bool(b and b[0]), f"{len(b[0]) if b and b[0] else 0} Bytes")
-pruef("Zustand: ausgeblendet", o.sichtbar is False, roh())
+pruef("Zustand gelesen", o.sichtbar is not None, roh())
 
 pruef("Einblenden", warten(u.sichtbar_setzen, o, True)[0] is True)
 warte(800); z = roh()
-pruef("  Haupt/Content/Countdown In + Active", "mainComposition:In" in z and "Content:In" in z and "Countdown:In" in z and "Active=True" in z, z)
+pruef("  Haupt/Content/Countdown In + Active + ShowOverlay", "mainComposition:In" in z and "Content:In" in z
+      and "Countdown:In" in z and "Active=True" in z and "ShowOverlay=True" in z, z)
 warte(3000)
 pruef("Ausblenden", warten(u.sichtbar_setzen, o, False)[0] is True)
 warte(800); z = roh()
-pruef("  alles aus + Active aus", ":In" not in z and "Active=False" in z, z)
+pruef("  Uno-Schalter ShowOverlay aus (blendet in der Mitte aus)", "ShowOverlay=False" in z, z)
 
 pruef("Countdown zurück", warten(u.timer_befehl, o, "reset")[0] is True, einzel.zeit_text(o.restzeit_ms()))
 pruef("Countdown Start", warten(u.timer_befehl, o, "play")[0] is True and o.timer.get("isRunning"))

@@ -2,6 +2,25 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.1 – Korrektur: Countdown blendet in der Mitte aus · 14.11.2026
+
+**Behoben**
+- Beim Ausblenden verschwand nur der Hintergrund – die drei Kreise mit „HOURS / MINUTES / SECONDS“
+  blieben in der Mitte stehen. Selbst geprüft mit einem eigenen Test-OBS und Standbildern der echten
+  Uno-Ausgabe: Der eigentliche Ein/Aus-Schalter dieses Unos ist das Häkchen „ShowOverlay“ (dasselbe
+  setzen „HideOverlay“ und der Aus-Schalter in Uno). Die Teile auf „Out“ zu stellen, entfernt nur den
+  Hintergrund.
+- Jetzt: **Einblenden** = Teile auf „In“ + „Active“ an + „ShowOverlay“ an.
+  **Ausblenden** = nur „ShowOverlay“ aus – Hintergrund und Countdown blenden zusammen sanft an Ort und
+  Stelle aus (nach etwa 0,5 Sekunden ist alles weg).
+- Das Tally-Licht beachtet den Uno-Schalter: Wird in Uno selbst ausgeschaltet, geht die Lampe aus.
+
+**Geprüft**
+- 157 automatische Tests; das nachgeahmte Uno zeigt jetzt wie das echte „nur Kreise“, wenn nur die
+  Teile ausgeblendet werden (Gegenprobe zum Fehler).
+- Mit dem echten Uno und eigenem Test-OBS: OpenRegie blendet ein (volles Bild), aus (nach 0,5 s leer),
+  wieder ein und wieder aus – jeweils mit Standbild geprüft, Tally-Licht stimmt.
+
 ## Build 1.1 – Uno-Overlays in OBS immer ganz oben · 14.11.2026
 
 **Behoben**

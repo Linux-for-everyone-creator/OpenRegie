@@ -181,7 +181,9 @@ class FalschesInternet:
                 with netz.lock:
                     netz.einzel_befehle.append(dict(d))
                 if befehl in ("ShowOverlay", "HideOverlay"):
-                    # Das echte Einzel-Uno sagt „ok“, zeigt aber NICHTS an.
+                    # wie beim echten: schaltet nur den Uno-Schalter „ShowOverlay“
+                    with netz.lock:
+                        netz.einzel.werte[CONTENT]["ShowOverlay"] = befehl == "ShowOverlay"
                     return ok(befehl == "ShowOverlay")
                 # alle anderen (auch GetOverlays, GetOverlayContent): HTTP 400
                 return self._antwort(400, {"error": {"message": f"Invalid command: {befehl}", "code": 400}})
@@ -285,13 +287,20 @@ class FalschesSingular:
     def uhr(self) -> int:
         return int(self.jetzt if self.jetzt is not None else time.time() * 1000)
 
-    # --- was man sieht ------------------------------------------------------
+    # --- was man sieht (wie beim echten, mit Standbildern aus OBS geprüft) ---
+    def was_man_sieht(self) -> str:
+        """"nichts", "nur_kreise" (Kreise ohne Hintergrund/Zahlen) oder "komplett"."""
+        if self.werte[CONTENT]["ShowOverlay"] is not True:
+            return "nichts"  # Uno-Schalter aus
+        if all(self.zustand[t] == "In" for t in (HAUPT, CONTENT, COUNTDOWN)) and self.werte[HAUPT]["Active"] is True:
+            return "komplett"
+        return "nur_kreise"
+
     def komplett_sichtbar(self) -> bool:
-        return (all(self.zustand[t] == "In" for t in (HAUPT, CONTENT, COUNTDOWN))
-                and self.werte[HAUPT]["Active"] is True)
+        return self.was_man_sieht() == "komplett"
 
     def ganz_aus(self) -> bool:
-        return all(z != "In" for z in self.zustand.values()) and self.werte[HAUPT]["Active"] is False
+        return self.was_man_sieht() == "nichts"
 
     def restzeit_s(self) -> float:
         t = self.werte[CONTENT]["Timer"]

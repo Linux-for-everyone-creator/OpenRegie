@@ -271,7 +271,8 @@ class VerwaltungTest(unittest.TestCase):
         self.assertEqual(self.netz.einzel.zustand[MESSAGE], "Out1")  # Endtext-Teil bleibt aus
         self.uno.umschalten(o)
         self.assertTrue(warte_bis(lambda: o.sichtbar is False, 3000))
-        self.assertTrue(self.netz.einzel.ganz_aus(), self.netz.einzel.zustand)
+        # der gemeldete Fehler: vorher blieben hier die Kreise in der Mitte stehen
+        self.assertEqual(self.netz.einzel.was_man_sieht(), "nichts")
         # kein „ShowOverlay“ über …/api – das zeigt beim echten Einzel-Uno nichts an
         self.assertEqual([d["command"] for d in self.api_befehle_einzel()], ["GetOverlays"])
 
@@ -320,6 +321,8 @@ class VerwaltungTest(unittest.TestCase):
         self.assertTrue(warte_bis(lambda: self.uno.overlays and self.einzel().bauplan is not None, 3000))
         self.netz.einzel.zustand[HAUPT] = "In"  # jemand blendet in Uno selbst ein
         self.assertTrue(warte_bis(lambda: self.einzel().sichtbar is True, 3000))  # Tally folgt
+        self.netz.einzel.werte[CONTENT]["ShowOverlay"] = False  # in Uno selbst ausgeschaltet
+        self.assertTrue(warte_bis(lambda: self.einzel().sichtbar is False, 3000))  # Tally folgt auch hier
         self.assertEqual(self.api_befehle_einzel(), [])  # kein sinnloses GetOverlays
 
     def test_altes_gespeichertes_einzel_uno_wird_erkannt(self):

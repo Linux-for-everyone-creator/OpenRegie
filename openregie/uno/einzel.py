@@ -10,9 +10,15 @@ Gesteuert werden sie über die Singular-Schnittstelle derselben Adresse:
   PATCH …/controlapps/<token>/control   → ändern, z. B. [{"subCompositionId": "…", "state": "In"}]
 
 Mit dem echten Uno geprüft (14.11.2026):
-  - Komplett sichtbar wird es nur, wenn der Hauptteil UND alle Teile, die im Bauplan
-    von Haus aus auf „In“ stehen, auf „In“ gehen – und das Häkchen „Active“ im Hauptteil
-    an ist. Ohne „Active“ erscheint nur der Kreis ohne Zahlen.
+  - Der eigentliche Ein/Aus-Schalter ist das Häkchen „ShowOverlay“ (im Teil „Content“).
+    Dasselbe setzt auch der Uno-Befehl HideOverlay bzw. der Aus-Schalter in Uno.
+    Mit „ShowOverlay“ aus ist NICHTS zu sehen.
+  - Der volle Auftritt (Hintergrund + Zahlen) kommt nur, wenn zusätzlich der Hauptteil UND
+    alle Teile, die im Bauplan von Haus aus auf „In“ stehen, auf „In“ gehen und das Häkchen
+    „Active“ im Hauptteil an ist. Ohne das sieht man nur die Kreise ohne Zahlen.
+  - Ausblenden NUR über „ShowOverlay“ aus: dann blendet alles zusammen sanft an Ort und Stelle
+    (in der Mitte) aus. Werden stattdessen die Teile auf „Out“ gestellt, verschwindet der
+    Hintergrund sofort und die Kreise bleiben stehen (mit Standbildern aus OBS geprüft, 14.11.2026).
   - Zeitgeber („timecontrol“) zählen die ABGELAUFENE Zeit in Millisekunden:
     {"value": abgelaufen_bis_UTC, "UTC": Startzeitpunkt, "isRunning": bool}.
     Steuern mit {"command": "play" | "pause" | "reset" | "start"}.
@@ -24,6 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 AKTIV_FELD = "Active"
+ZEIGEN_NAMEN = ("showoverlay",)  # Uno-eigener Ein/Aus-Schalter
 DAUER_NAMEN = ("begintime", "duration", "dauer", "countdowntime", "starttime")
 TEXT_ARTEN = ("text", "textarea")
 
@@ -42,6 +49,7 @@ class Bauplan:
     haupt: str  # Kennung des Hauptteils
     ein_teile: list[str] = field(default_factory=list)  # diese Teile gehen beim Einblenden auf „In“
     aktiv_feld: str | None = None  # Häkchen im Hauptteil, das mit an/aus geht
+    zeigen_feld: tuple[str, str] | None = None  # (Teil, Feld) des Uno-eigenen Ein/Aus-Schalters
     timer: tuple[str, str] | None = None  # (Teil, Feld) des Zeitgebers
     dauer: tuple[str, str] | None = None  # (Teil, Feld) der Dauer in Sekunden
     textfelder: list[tuple[str, str, str]] = field(default_factory=list)  # (Teil, Feld, Titel)
@@ -69,7 +77,9 @@ def bauplan_lesen(model) -> Bauplan | None:
         felder = _felder(teil)
         for f in felder:
             art = f.get("type")
-            if art == "timecontrol" and plan.timer is None:
+            if art == "checkbox" and str(f["id"]).lower() in ZEIGEN_NAMEN and plan.zeigen_feld is None:
+                plan.zeigen_feld = (kennung, str(f["id"]))
+            elif art == "timecontrol" and plan.timer is None:
                 plan.timer = (kennung, str(f["id"]))
             elif art in TEXT_ARTEN:
                 plan.textfelder.append((kennung, str(f["id"]), str(f.get("title") or f["id"])))
@@ -104,6 +114,8 @@ def ist_sichtbar(teile: dict[str, dict], plan: Bauplan) -> bool | None:
     haupt = teile.get(plan.haupt)
     if haupt is None:
         return None
+    if plan.zeigen_feld and wert(teile, plan.zeigen_feld) is False:
+        return False  # Uno-Schalter aus: nichts zu sehen, egal wie die Teile stehen
     return haupt["state"].lower() == "in"
 
 
@@ -123,7 +135,15 @@ def textfelder_lesen(teile: dict[str, dict], plan: Bauplan) -> list[Feld]:
 
 
 def ein_aus_befehl(plan: Bauplan, sichtbar: bool) -> list[dict]:
-    """Der PATCH-Inhalt zum Ein- bzw. Ausblenden."""
+    """Der PATCH-Inhalt zum Ein- bzw. Ausblenden.
+
+    Einblenden: Teile auf „In“, „Active“ an, Uno-Schalter „ShowOverlay“ an.
+    Ausblenden: nur der Uno-Schalter aus – so blendet alles sanft an Ort und Stelle aus.
+    (Ohne Uno-Schalter: Teile auf „Out“ und „Active“ aus.)
+    """
+    if not sichtbar and plan.zeigen_feld:
+        teil, feld = plan.zeigen_feld
+        return [{"subCompositionId": teil, "payload": {feld: False}}]
     zustand = "In" if sichtbar else "Out"
     befehl = []
     for kennung in plan.ein_teile:
@@ -131,6 +151,13 @@ def ein_aus_befehl(plan: Bauplan, sichtbar: bool) -> list[dict]:
         if kennung == plan.haupt and plan.aktiv_feld:
             eintrag["payload"] = {plan.aktiv_feld: sichtbar}
         befehl.append(eintrag)
+    if sichtbar and plan.zeigen_feld:
+        teil, feld = plan.zeigen_feld
+        eintrag = next((e for e in befehl if e["subCompositionId"] == teil), None)
+        if eintrag is None:
+            befehl.append({"subCompositionId": teil, "payload": {feld: True}})
+        else:
+            eintrag.setdefault("payload", {})[feld] = True
     return befehl
 
 
