@@ -1,26 +1,40 @@
-# OpenRegie – Barrierefrei streamen
+# OpenRegie – Profi-Regie für alle. Einfach live.
 
-Eigene Sendezentrale für Livestreams unter CachyOS. OBS läuft als Motor im Hintergrund,
-OpenRegie steuert es über den OBS-WebSocket.
+Eigene Sendezentrale für Livestreams unter CachyOS. OBS läuft unsichtbar als Motor im Hintergrund,
+OpenRegie steuert es über den OBS-WebSocket. Alle Grafiken kommen von Overlays.uno.
 
 ## Starten
-Im Startmenü auf **OpenRegie** klicken.
+Im Startmenü auf **OpenRegie** klicken. OBS startet automatisch unsichtbar mit.
 (Den Eintrag bei Bedarf neu anlegen: `sh werkzeuge/startmenue_einrichten.sh`)
 
 ## Einmalig in OBS einstellen
 **Werkzeuge → WebSocket-Servereinstellungen → „WebSocket-Server aktivieren“** einschalten → **OK**.
-Port und Passwort liest OpenRegie selbst.
+Port und Passwort liest OpenRegie selbst. Welche Szenensammlung geladen wird, steht in
+`einstellungen.toml` bei `[obs] szenensammlung`.
 
-## Countdown in den Stream bringen
-In OpenRegie auf **„Countdown in OBS einrichten“** klicken. Der Countdown kommt in die Szene,
-die gerade gesendet wird. Für weitere Szenen: erst in OBS die Szene wechseln, dann noch einmal klicken.
+## Overlays.uno verbinden
+1. In Overlays.uno das Projekt öffnen, oben rechts im Menü **„API Description“** wählen, die Adresse kopieren.
+2. In OpenRegie links auf **„Uno-Projekte“** und dann auf **„Aus Zwischenablage einfügen“** klicken.
+
+Die Adresse wird im Passwortspeicher des Systems gespeichert (KDE-Wallet bzw. Schlüsselbund).
+Damit die Overlays im Stream zu sehen sind, muss die **Ausgabe-Adresse** (Output) des Uno-Projekts
+einmal als Browserquelle in OBS stehen.
+
+## Twitch einrichten (einmalig)
+OpenRegie braucht eine eigene, öffentliche „Client-ID“ von Twitch:
+1. Auf https://dev.twitch.tv/console anmelden → **„Deine Anwendung registrieren“**.
+2. Name: z. B. `OpenRegie`, OAuth-Weiterleitungs-URL: `http://localhost`, Kategorie: *Broadcaster Suite*,
+   Client-Typ: **Öffentlich**.
+3. Die **Client-ID** kopieren und in `einstellungen.toml` bei `[twitch] client_id` eintragen.
+   (Sie ist kein Geheimnis. Ein Client-Secret wird **nicht** gebraucht.)
+4. OpenRegie neu starten → **„Mit Twitch anmelden“**.
 
 ## Aussehen ändern
 Alle Farben, Texte und Größen stehen in **`einstellungen.toml`**. Nach dem Ändern OpenRegie neu starten.
-Für die Countdown-Seite in OBS reicht ein erneuter Klick auf „Countdown in OBS einrichten“.
 
 ## Für Entwickler
 - Tests: `python3 -m unittest discover -s tests -t .`
 - Test mit echtem OBS (fasst die eigenen OBS-Einstellungen nicht an): `python3 werkzeuge/test_mit_echtem_obs.py`
 - Build-Nummer: Datei `VERSION`
 - Pläne: `ROADMAP.md` · Änderungen: `CHANGELOG.md`
+- Protokoll für die Fehlersuche: `~/.local/state/openregie/openregie.log`

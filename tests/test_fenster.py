@@ -127,7 +127,6 @@ class FensterTest(Grundlage):
     def test_overlay_ohne_texte(self):
         b = self.f.overlay_bedienfeld
         klick(self.zeile("Countdown").name)
-        self.assertTrue(warte_bis(lambda: not b.knopf_texte_neu.isEnabled() is False, 3000))
         self.assertTrue(warte_bis(lambda: b.knopf_texte_neu.isEnabled(), 3000))
         self.assertEqual(b.eingaben, {})
         self.assertFalse(b.knopf_uebernehmen.isEnabled())
