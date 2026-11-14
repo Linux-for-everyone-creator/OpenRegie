@@ -2,6 +2,31 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.1 – Uno-Overlays in OBS immer ganz oben · 14.11.2026
+
+**Behoben**
+- Der Countdown war im Stream nicht zu sehen. Ursache: In OBS lag die Bildschirmaufnahme über der
+  Countdown-Quelle – und diese Quelle war noch die alte „Rolliregie Countdown“ aus Build 1.0
+  (Adresse `http://127.0.0.1:8787/countdown` gibt es seit 1.1 nicht mehr, sie blieb leer).
+  Eine Quelle mit der Uno-Ausgabe gab es in OBS gar nicht.
+
+**Neu**
+- OpenRegie kümmert sich selbst um die Uno-Quellen in OBS (beim Verbinden und bei jeder Änderung in OBS):
+  - Für jedes Uno-Projekt gibt es automatisch in **jeder Szene** eine Browserquelle „Uno: <Name>“ mit der
+    Ausgabe-Adresse von Uno, so groß wie das Bild. Neue Szenen bekommen sie auch.
+  - **Uno-Quellen liegen immer ganz oben.** Kommt in OBS eine Quelle dazu oder wird etwas darüber
+    geschoben, rückt OpenRegie die Overlays sofort wieder nach oben. Die übrige Reihenfolge bleibt.
+  - Auch von Hand angelegte Uno-Quellen werden erkannt (an der Uno-Ausgabe-Adresse) – nichts doppelt.
+  - Die alte, leere Quelle „Rolliregie Countdown“ wird einmal entfernt (nur diese, sonst nichts).
+  - Abschaltbar in `einstellungen.toml`: `[obs] uno_in_jede_szene`, `[obs] overlays_immer_oben`.
+
+**Geprüft**
+- 155 automatische Tests, zweimal ohne Fehler; neu u. a. genau Kevins Szene, neue Quelle kommt dazu,
+  von Hand darübergeschoben, neue Szene, Neuverbinden ohne Doppel, keine Endlosschleife, Oberfläche flüssig.
+- 26 von 26 Prüfungen mit echtem OBS 33.0.1 (getrenntes Test-OBS), davon 7 neu für die Uno-Quellen.
+- Echter Start mit Kevins OBS: alte Quelle entfernt, „Uno: Countdown | Circles“ (1920 × 1080) liegt
+  in „Szene“ ganz oben über der Bildschirmaufnahme.
+
 ## Build 1.1 – Korrektur: Neustart mit Einzel-Uno, Regiepult friert nie ein · 14.11.2026
 
 **Behoben**

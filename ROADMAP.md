@@ -41,6 +41,7 @@ OpenRegie wird Open Source: keine Geheimnisse im Code, Zugangsdaten nur im Passw
 - [x] Neues Aussehen nach dem Entwurf „Hauptfenster“ (Bibliothek mit Kacheln, Lampen, Live-Bild, Ausgewählt)
 - [x] Neustart mit eingefügtem Einzel-Uno repariert, Meldungen sauber getrennt
 - [x] Grundregel „Ein Regiepult friert nie ein“: Zeitlimit für Uno, Passwortspeicher im Hintergrund
+- [x] Uno-Quellen automatisch in jeder OBS-Szene und immer ganz oben; alte Countdown-Quelle entfernt
 - [ ] Twitch-App anlegen und Client-ID eintragen
 
 ### Build 1.2

@@ -244,6 +244,7 @@ class UnoProjekt:
         self.einzeln = einzeln  # True = Einzel-Uno (genau ein Overlay, kennt kein „GetOverlays“)
         self.erreichbar: bool | None = None
         self.meldung = ""  # warum nicht erreichbar (für Menschen)
+        self.ausgabe = ""  # Ausgabe-Adresse für OBS (Browserquelle), kommt von Uno
 
 
 # Funktionen eines Overlays (für „nicht unterstützt“)
@@ -254,6 +255,7 @@ class UnoVerwaltung(QObject):
     """Kennt alle Uno-Projekte und ihre Overlays, schickt Befehle, hält Tally-Lichter aktuell."""
 
     liste_geaendert = Signal()  # Overlays dazugekommen/weg
+    ausgaben_geaendert = Signal()  # Ausgabe-Adressen für OBS dazugekommen/weg
     overlay_geaendert = Signal(object)  # ein Overlay (Sichtbarkeit, Felder) hat sich geändert
     meldung = Signal(str, bool)  # (Text für Menschen, ist_fehler)
 
@@ -361,6 +363,7 @@ class UnoVerwaltung(QObject):
             if ok:
                 def eintragen():
                     self._overlays_uebernehmen(projekt, payload)
+                    self._ausgabe_holen(projekt)
                     fertig(True, self._texte.meldung_uno_projekt_ok.format(anzahl=len(overlays_lesen(payload))))
 
                 speichern(eintragen)
@@ -382,6 +385,8 @@ class UnoVerwaltung(QObject):
             for s in [s for s, o in self.overlays.items() if o.projekt is projekt]:
                 del self.overlays[s]
             self.liste_geaendert.emit()
+            if projekt.ausgabe:
+                self.ausgaben_geaendert.emit()
 
     # ------------------------------------------------------------------
     #  Einzel-Unos (Singular-Schnittstelle)
@@ -402,6 +407,7 @@ class UnoVerwaltung(QObject):
                 name = str(daten.get("name") or "").strip()
                 if name:
                     overlay.name = projekt.name = name
+                self._ausgabe_merken(projekt, daten)
                 bild = str(daten.get("thumbnail") or "")
                 if bild.startswith("//"):
                     bild = "https:" + bild
@@ -430,6 +436,33 @@ class UnoVerwaltung(QObject):
             fertig(overlay, "", "")
 
         self._singular(projekt, "GET", "", None, info)
+
+    def _ausgabe_merken(self, projekt: UnoProjekt, info) -> None:
+        adresse = str(info.get("outputUrl") or "") if isinstance(info, dict) else ""
+        if adresse.startswith("//"):
+            adresse = "https:" + adresse
+        if adresse.startswith(("https://", "http://")) and adresse != projekt.ausgabe:
+            projekt.ausgabe = adresse
+            self.ausgaben_geaendert.emit()
+
+    def _ausgabe_holen(self, projekt: UnoProjekt) -> None:
+        """Bei Projekten mit mehreren Overlays: Ausgabe-Adresse einmal über GET … holen."""
+        if projekt.ausgabe or getattr(projekt, "_ausgabe_unterwegs", False):
+            return
+        projekt._ausgabe_unterwegs = True
+
+        def antwort(ok, daten, _fehler, _art):
+            projekt._ausgabe_unterwegs = False
+            if ok:
+                self._ausgabe_merken(projekt, daten)
+            else:
+                log.info("Ausgabe-Adresse von %s nicht lesbar", projekt.name)
+
+        self._singular(projekt, "GET", "", None, antwort)
+
+    def ausgaben(self) -> list[tuple[str, str]]:
+        """(Projektname, Ausgabe-Adresse) aller Projekte, deren Adresse bekannt ist."""
+        return [(p.name, p.ausgabe) for p in self.projekte if p.ausgabe]
 
     def _einzel_eintragen(self, overlay: Overlay) -> None:
         schluessel = overlay.schluessel
@@ -502,6 +535,7 @@ class UnoVerwaltung(QObject):
                 self._laedt -= 1
                 if ok:
                     self._overlays_uebernehmen(p, payload)
+                    self._ausgabe_holen(p)
                 self._erreichbar(p, ok, fehler, art)
 
             self._befehl(projekt, {"command": "GetOverlays"}, antwort)

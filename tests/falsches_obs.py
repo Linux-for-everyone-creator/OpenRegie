@@ -55,6 +55,7 @@ class FalschesObs(QObject):
         self.transform: dict[int, dict] = {}
         self.bild = testbild_daten()
         self.sammlung = "Unbenannt"
+        self.umsortiert = 0  # wie oft SetSceneItemIndex kam
         self.sammlungen = ["Unbenannt", "Show"]
 
     # ------------------------------------------------------------------
@@ -122,6 +123,35 @@ class FalschesObs(QObject):
         if typ == "StopStream":
             self.stream_stoppen()
             return (*OK, None)
+        if typ == "GetSceneList":
+            return (*OK, {"currentProgramSceneName": self.szene,
+                          "scenes": [{"sceneName": n, "sceneIndex": i} for i, n in enumerate(self.szenen)]})
+        if typ == "GetInputList":
+            art = d.get("inputKind")
+            return (*OK, {"inputs": [{"inputName": n, "inputKind": q["kind"]} for n, q in self.quellen.items()
+                                     if not art or q["kind"] == art]})
+        if typ == "RemoveInput":
+            if d["inputName"] not in self.quellen:
+                return (False, 600, "No source", None)
+            del self.quellen[d["inputName"]]
+            for szene in self.szenen:
+                self.szenen[szene] = [e for e in self.szenen[szene] if e[1] != d["inputName"]]
+            return (*OK, None)
+        if typ == "GetSceneItemList":
+            if d.get("sceneName") not in self.szenen:
+                return (False, 600, "No scene", None)
+            return (*OK, {"sceneItems": [
+                {"sceneItemId": k, "sourceName": n, "sceneItemIndex": i, "sceneItemEnabled": an,
+                 "inputKind": self.quellen.get(n, {}).get("kind")}
+                for i, (k, n, an) in enumerate(self.szenen[d["sceneName"]])]})
+        if typ == "SetSceneItemIndex":
+            liste = self.szenen[d["sceneName"]]
+            eintrag = next(e for e in liste if e[0] == d["sceneItemId"])
+            liste.remove(eintrag)
+            liste.insert(min(int(d["sceneItemIndex"]), len(liste)), eintrag)
+            self.umsortiert += 1
+            self.ereignis("SceneItemListReindexed", {"sceneName": d["sceneName"]})
+            return (*OK, None)
         if typ == "GetInputKindList":
             return (*OK, {"inputKinds": list(self.arten)})
         if typ == "GetVideoSettings":
@@ -138,6 +168,7 @@ class FalschesObs(QObject):
                 return (False, 600, "No scene", None)
             self.quellen[d["inputName"]] = {"kind": d["inputKind"], "settings": dict(d.get("inputSettings", {}))}
             kennung = self._in_szene(d["sceneName"], d["inputName"], d.get("sceneItemEnabled", True))
+            self.ereignis("InputCreated", {"inputName": d["inputName"]})
             return (*OK, {"inputUuid": "u", "sceneItemId": kennung})
         if typ == "SetInputSettings":
             q = self.quellen.get(d["inputName"])
@@ -153,6 +184,8 @@ class FalschesObs(QObject):
                     return (*OK, {"sceneItemId": kennung})
             return (False, 600, "No scene items were found", None)
         if typ == "CreateSceneItem":
+            if d.get("sceneName") not in self.szenen or d.get("sourceName") not in self.quellen:
+                return (False, 600, "No scene or source", None)
             kennung = self._in_szene(d["sceneName"], d["sourceName"], d.get("sceneItemEnabled", True))
             return (*OK, {"sceneItemId": kennung})
         if typ == "SetSceneItemEnabled":
@@ -167,10 +200,26 @@ class FalschesObs(QObject):
         return (False, 204, "Unknown request type", None)
 
     def _in_szene(self, szene, quelle, an):
+        """Neue Quellen kommen wie in OBS ganz nach oben (Ende der Liste)."""
         kennung = self.naechste_id
         self.naechste_id += 1
         self.szenen[szene].append((kennung, quelle, an))
+        self.ereignis("SceneItemCreated", {"sceneName": szene, "sourceName": quelle, "sceneItemId": kennung})
         return kennung
+
+    # --- Hilfen für Tests: Quellen von Hand anlegen (wie in OBS geklickt) ----
+    def quelle_anlegen(self, szene, name, art, einstellungen=None):
+        if name not in self.quellen:
+            self.quellen[name] = {"kind": art, "settings": dict(einstellungen or {})}
+        return self._in_szene(szene, name, True)
+
+    def reihenfolge(self, szene) -> list[str]:
+        """Namen von unten nach oben."""
+        return [n for _k, n, _an in self.szenen[szene]]
+
+    def szene_anlegen(self, name):
+        self.szenen[name] = []
+        self.ereignis("SceneCreated", {"sceneName": name, "isGroup": False})
 
     # --- Steuerung aus dem Test -------------------------------------------
     def ereignis(self, typ, daten):

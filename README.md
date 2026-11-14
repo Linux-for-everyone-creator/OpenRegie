@@ -19,8 +19,8 @@ Port und Passwort liest OpenRegie selbst. Welche Szenensammlung geladen wird, st
 Die Adresse wird im Passwortspeicher des Systems gespeichert (KDE-Wallet bzw. Schlüsselbund).
 Es gehen beide Arten: Uno-Projekte mit mehreren Overlays und einzelne Unos (z. B. „Countdown | Circles“).
 Bei Overlays mit Zeitgeber erscheinen rechts die Countdown-Knöpfe (Start, Pause, Zurück, Dauer).
-Damit die Overlays im Stream zu sehen sind, muss die **Ausgabe-Adresse** (Output) des Uno-Projekts
-einmal als Browserquelle in OBS stehen.
+Die Overlays kommen von selbst in den Stream: OpenRegie legt für jedes Uno-Projekt in jeder OBS-Szene
+eine Browserquelle „Uno: <Name>“ an und hält sie immer ganz oben (abschaltbar in `einstellungen.toml`, `[obs]`).
 
 ## Twitch einrichten (einmalig)
 OpenRegie braucht eine eigene, öffentliche „Client-ID“ von Twitch:

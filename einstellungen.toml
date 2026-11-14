@@ -33,6 +33,11 @@ szenensammlung = "Unbenannt"
 start_zeitlimit_sekunden = 30
 # true = Beim Schließen von OpenRegie auch das OBS beenden, das OpenRegie gestartet hat.
 beim_beenden_schliessen = true
+# true = Für jedes Uno-Projekt automatisch eine Browserquelle „Uno: …“ in JEDER Szene anlegen.
+uno_in_jede_szene = true
+# true = Uno-Quellen liegen in jeder Szene immer ganz oben (sonst verdeckt z. B. die
+# Bildschirmaufnahme den Countdown).
+overlays_immer_oben = true
 
 
 # ---------------------------------------------------------------------

@@ -302,7 +302,7 @@ class FalschesSingular:
     def info(self):
         return {"id": 1, "type": "controlapp", "name": self.name,
                 "thumbnail": self.vorschau_adresse,
-                "outputUrl": "https://controlapi.example/output/AUSGABE/Output?aspect=16:9"}
+                "outputUrl": "https://controlapi.singular.live/output/AUSGABE123/Output?aspect=16:9"}
 
     def model(self):
         feld = lambda i, art, std=None: {"id": i, "title": i, "type": art, "defaultValue": std}

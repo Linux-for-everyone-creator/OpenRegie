@@ -79,6 +79,7 @@ def main() -> int:
 
     from .geheimspeicher import Geheimspeicher
     from .obs.motor import MotorZustand, ObsMotor
+    from .obs.overlays_in_obs import ObsOverlays
     from .obs.verbindung import ObsVerbindung
     from .obs.vorschau import Vorschau
     from .oberflaeche.hauptfenster import Hauptfenster
@@ -98,6 +99,7 @@ def main() -> int:
         vorschau = Vorschau(verbindung, E.vorschau)
         uno = UnoVerwaltung(E.uno, E.texte, speicher)
         twitch = TwitchKonto(E.twitch, E.texte, speicher)
+        obs_overlays = ObsOverlays(E.obs, verbindung, uno)  # Uno-Quellen in OBS anlegen und oben halten
         fenster = Hauptfenster(E, verbindung, vorschau, motor, uno, twitch)
     except EinstellungsFehler as fehler:
         hinweis("OpenRegie", str(fehler))

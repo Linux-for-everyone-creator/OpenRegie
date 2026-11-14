@@ -177,6 +177,47 @@ frag("StopStream")
 pruef("On Air geht aus nach Stopp", warte_bis(lambda: v.sendung is Sendung.AUS, 15000), str(sendungen))
 pruef("Ohne Stream keine Nachfrage", not m.braucht_nachfrage_beim_beenden)
 
+# Uno-Quellen: alte Countdown-Quelle weg, Uno-Ausgabe in jede Szene, immer ganz oben
+from PySide6.QtCore import QObject, Signal
+from openregie.obs.overlays_in_obs import ObsOverlays
+class UnoAttrappe(QObject):
+    ausgaben_geaendert = Signal()
+    def ausgaben(self):
+        return [("Countdown | Circles", "https://controlapi.singular.live/output/OPENREGIETEST/Output?aspect=16:9")]
+szene = v.szene or "Szene"
+frag("CreateInput", {"sceneName": szene, "inputName": "Rolliregie Countdown", "inputKind": "browser_source",
+                     "inputSettings": {"url": "http://127.0.0.1:8787/countdown"}, "sceneItemEnabled": True})
+frag("CreateInput", {"sceneName": szene, "inputName": "Bildschirmaufnahme", "inputKind": "color_source_v3",
+                     "inputSettings": {"color": 0xFF00AA00}, "sceneItemEnabled": True})
+frag("CreateScene", {"sceneName": "Pause"})
+def reihenfolge(sz):
+    ok, d, _ = frag("GetSceneItemList", {"sceneName": sz})
+    return [i["sourceName"] for i in sorted(d.get("sceneItems", []), key=lambda i: i["sceneItemIndex"])]
+uno_attrappe = UnoAttrappe()
+oo = ObsOverlays(oe, v, uno_attrappe)
+oo.anstossen("ganz")
+UNO = "Uno: Countdown | Circles"
+warte_bis(lambda: oo.durchlaeufe and not oo._laeuft and reihenfolge(szene)[-1:] == [UNO], 15000)
+r = reihenfolge(szene)
+pruef("Alte Quelle „Rolliregie Countdown“ entfernt", "Rolliregie Countdown" not in r, str(r))
+pruef("Uno-Quelle ganz oben (über der Bildschirmaufnahme)", r[-1:] == [UNO] and "Bildschirmaufnahme" in r, str(r))
+pruef("Uno-Quelle auch in Szene „Pause“", reihenfolge("Pause") == [UNO], str(reihenfolge("Pause")))
+ok, d, _ = frag("GetInputSettings", {"inputName": UNO})
+pruef("Uno-Quelle so groß wie das Bild", (d.get("inputSettings") or {}).get("width") == 1280, str(d.get("inputSettings")))
+frag("CreateInput", {"sceneName": szene, "inputName": "Kamera", "inputKind": "color_source_v3",
+                     "inputSettings": {"color": 0xFF0000AA}, "sceneItemEnabled": True})
+pruef("Neue Quelle in OBS → Uno rückt wieder nach oben",
+      warte_bis(lambda: reihenfolge(szene)[-1:] == [UNO] and "Kamera" in reihenfolge(szene), 8000), str(reihenfolge(szene)))
+ok, d, _ = frag("GetSceneItemList", {"sceneName": szene})
+kamera = next(i for i in d["sceneItems"] if i["sourceName"] == "Kamera")
+frag("SetSceneItemIndex", {"sceneName": szene, "sceneItemId": kamera["sceneItemId"], "sceneItemIndex": len(d["sceneItems"]) - 1})
+pruef("Von Hand darübergeschoben → Uno rückt wieder nach oben",
+      warte_bis(lambda: reihenfolge(szene)[-1:] == [UNO], 8000), str(reihenfolge(szene)))
+warte(1500)  # OpenRegie prüft nach dem eigenen Verschieben noch genau einmal nach
+anzahl = oo.durchlaeufe
+warte(2500)
+pruef("Kommt zur Ruhe (keine Endlosschleife)", oo.durchlaeufe == anzahl, f"{oo.durchlaeufe - anzahl} weitere Durchläufe")
+
 # OBS stürzt ab → klare Meldung, „OBS starten“ holt es zurück
 m._prozess.kill()
 pruef("Absturz wird erkannt", warte_bis(lambda: m.zustand is MotorZustand.FEHLER, 5000), m.meldung)
