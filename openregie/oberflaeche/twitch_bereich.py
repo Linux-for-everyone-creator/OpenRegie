@@ -1,5 +1,6 @@
 """Twitch-Bereich unter der Vorschau: anmelden und Streamtitel ändern.
 
+  Nicht eingerichtet: [ Mit Twitch anmelden ] ausgegraut, sagt warum (Client-ID fehlt)
   Nicht angemeldet:   [ Mit Twitch anmelden ]
   Warten auf Bestätigung: Code groß anzeigen, [Twitch-Seite öffnen] [Abbrechen]
   Angemeldet:         Streamtitel [______________] [Titel ändern]   „Angemeldet als …“ [Abmelden]
@@ -68,6 +69,7 @@ class TwitchBereich(QWidget):
         knoepfe.setSpacing(g.abstand // 2)
         self.anmelden = knopf(t.knopf_twitch_anmelden, "twitch")
         self.anmelden.clicked.connect(self._anmelden)
+        gesperrt_hinweis(self.anmelden, self._anmelden_gesperrt_grund, self._kurz_melden)
         knoepfe.addWidget(self.anmelden)
         self.seite_oeffnen = knopf(t.knopf_twitch_seite, "twitch")
         self.seite_oeffnen.clicked.connect(lambda: self._seite and self._browser_oeffnen(self._seite))
@@ -79,7 +81,7 @@ class TwitchBereich(QWidget):
 
         self.meldung = meldung()
         lay.addWidget(self.meldung)
-        gesperrt_hinweis(self.uebernehmen, lambda: t.gesperrt_titel, self.meldung.kurz_zeigen)
+        gesperrt_hinweis(self.uebernehmen, lambda: t.gesperrt_titel, self._kurz_melden)
 
         konto.anmeldung_geaendert.connect(self._zustand)
         konto.code_bereit.connect(self._code)
@@ -95,7 +97,9 @@ class TwitchBereich(QWidget):
         self.titel_reihe.setVisible(angemeldet)
         self.abmelden.setVisible(angemeldet)
         self.konto_text.setText(t.twitch_angemeldet.format(name=self.konto.name) if angemeldet else "")
-        self.anmelden.setVisible(zustand is Anmeldung.ABGEMELDET)
+        # Ohne Client-ID bleibt der Knopf sichtbar, aber ausgegraut – so sieht man, wo es losgeht.
+        self.anmelden.setVisible(zustand in (Anmeldung.ABGEMELDET, Anmeldung.NICHT_EINGERICHTET))
+        self.anmelden.setEnabled(zustand is Anmeldung.ABGEMELDET)
         self.seite_oeffnen.setVisible(wartet)
         self.abbrechen.setVisible(wartet)
         self.hinweis.setVisible(not angemeldet)
@@ -112,6 +116,14 @@ class TwitchBereich(QWidget):
         self.hinweis.setObjectName("hinweis_gross")
         self.hinweis.style().unpolish(self.hinweis)
         self.hinweis.style().polish(self.hinweis)
+
+    def _kurz_melden(self, text: str) -> None:
+        self.meldung.kurz_zeigen(text)
+
+    def _anmelden_gesperrt_grund(self) -> str:
+        if self.konto.zustand is Anmeldung.NICHT_EINGERICHTET:
+            return self.E.texte.gesperrt_twitch_client_id
+        return ""
 
     def _anmelden(self) -> None:
         self.meldung.zeigen("")

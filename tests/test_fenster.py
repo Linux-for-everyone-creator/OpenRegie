@@ -381,9 +381,11 @@ class EinzelUnoFensterTest(Grundlage):
         self.assertGreater(self.b.meldung_zeit.geometry().top(), self.b.zeit.geometry().bottom())
         self.assertGreaterEqual(self.b.meldung_zeit.height(),
                                 self.b.meldung_zeit.heightForWidth(self.b.meldung_zeit.width()))
-        self.assertLess(self.b.meldung_zeit.geometry().bottom(), self.b.countdown_zustand.geometry().top())
-        # Hinweis verschwindet von selbst
+        self.assertLess(self.b.meldung_zeit.geometry().bottom(), self.b.start.geometry().top())
+        self.assertFalse(self.b.countdown_zustand.isVisible())  # der Hinweis steht an seiner Stelle
+        # Hinweis verschwindet von selbst, die Zustandszeile kommt zurück
         self.assertTrue(warte_bis(lambda: not self.b.meldung_zeit.isVisible(), self.b.HINWEIS_MS + 1500))
+        self.assertTrue(self.b.countdown_zustand.isVisible())
         n = len(self.uno_patches())
         warte(200)
         self.assertEqual(len(self.uno_patches()), n)
@@ -648,6 +650,48 @@ class EinzelUnoFensterTest(Grundlage):
             self.assertTrue(k.isVisible(), k.text())
             self.assertLessEqual(k.mapTo(self.b, k.rect().topRight()).x(), rechts, k.text())
             self.assertGreaterEqual(k.height(), self.E.groessen.knopf_hoehe)
+
+    def test_niedriger_bildschirm_nichts_ueberlappt(self):
+        """Kevins Bildschirm: Fenster 1903 × 971, OBS-Meldung mit „OBS starten“/„Neu verbinden“ sichtbar.
+        Früher brauchte das Fenster über 1100 Pixel – Qt quetschte dann den grünen Start-Knopf über die
+        Countdown-Zeit. Jetzt muss alles ohne Rollen passen, auch mit einem Hinweis unter der Zeit."""
+        f = self.f
+        f.meldungstext.setText("OBS wurde unerwartet beendet. Klicke auf „OBS starten“.")
+        for w in (f.meldungsleiste, f.knopf_obs_starten, f.knopf_neu):
+            w.show()
+        warte(50)
+        self.assertLessEqual(f.minimumSizeHint().height(), 900)
+        f.resize(1903, 971)
+        warte(200)
+        b = self.b
+        # Die OBS-Meldung steht in der Mitte, nimmt der rechten Spalte also keine Höhe weg
+        self.assertGreater(f.meldungsleiste.mapTo(f, f.meldungsleiste.rect().topLeft()).x(),
+                           f.bibliothek.mapTo(f, f.bibliothek.rect().topRight()).x())
+
+        def passt_ohne_rollen():
+            return not b.mitte_flaeche.verticalScrollBar().isVisible() and b.mitte.height() <= \
+                b.mitte_flaeche.viewport().height()
+
+        self.assertTrue(passt_ohne_rollen())
+        b._hinweis_zeit(self.E.texte.meldung_countdown_live, False)  # Hinweis unter der Zeit
+        warte(100)
+        self.assertTrue(passt_ohne_rollen())
+        b._hinweis_zeit("")
+        warte(100)
+
+        def unten(w):
+            return w.mapTo(b, w.rect().bottomLeft()).y()
+
+        def oben(w):
+            return w.mapTo(b, w.rect().topLeft()).y()
+
+        reihenfolge = [b.zeit, b.countdown_zustand, b.start, b.dauer_knoepfe[60], b.knopf_uebernehmen]
+        for vorher, nachher in zip(reihenfolge, reihenfolge[1:]):
+            self.assertLess(unten(vorher), oben(nachher), (vorher, nachher))
+        self.assertEqual(b.zeit.height(), b.zeit.minimumHeight())  # die große Zeit wird nicht gequetscht
+        # Einblenden/Ausblenden immer ganz zu sehen, ohne Rollen
+        self.assertLessEqual(unten(b.ausblenden), b.height())
+        self.assertGreaterEqual(oben(b.einblenden), b.mitte_flaeche.geometry().bottom())
 
 
 class NeustartTest(Grundlage):
@@ -1021,6 +1065,18 @@ class TwitchFensterTest(Grundlage):
         self.assertEqual(self.netz.titel, "Mein neuer Streamtitel")
         klick(tb.abmelden)
         self.assertTrue(tb.anmelden.isVisible())
+
+    def test_ohne_client_id_knopf_ausgegraut_und_sagt_warum(self):
+        tb = self.f.twitch_bereich
+        self.twitch.client_id = ""  # wie mit leerer client_id in einstellungen.toml
+        self.twitch.zustand = Anmeldung.NICHT_EINGERICHTET
+        tb._zustand(self.twitch.zustand)
+        self.assertTrue(tb.anmelden.isVisible())
+        self.assertFalse(tb.anmelden.isEnabled())
+        self.assertEqual(gesperrt_text(tb.anmelden), self.E.texte.gesperrt_twitch_client_id)
+        QTest.mouseClick(tb.anmelden, Qt.MouseButton.LeftButton)
+        self.assertEqual(tb.meldung.text(), self.E.texte.gesperrt_twitch_client_id)
+        self.assertIs(self.twitch.zustand, Anmeldung.NICHT_EINGERICHTET)  # Klick löst nichts aus
 
     def test_ohne_uno_projekt_einrichtung_zeigen(self):
         self.assertIs(self.f.bedienfelder.currentWidget(), self.f.uno_einrichtung)

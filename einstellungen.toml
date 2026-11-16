@@ -77,7 +77,7 @@ countdown_hoechstdauer_sekunden = 35999
 [twitch]
 # Öffentliche Client-ID der OpenRegie-App bei Twitch (dev.twitch.tv → Anwendungen,
 # Typ „Öffentlich“). Sie ist kein Geheimnis. Leer = Twitch-Bereich ist aus.
-client_id = ""
+client_id = "rt36v95hjpq1khhfcjdn0aide28j64"
 # Adressen von Twitch. Nur ändern, wenn Twitch umzieht.
 anmelde_adresse = "https://id.twitch.tv"
 api_adresse = "https://api.twitch.tv/helix"
@@ -277,6 +277,7 @@ gesperrt_texte_senden = "Die Texte werden gerade übernommen – einen Moment."
 gesperrt_keine_texte = "Dieses Overlay hat keine Texte zum Ändern."
 gesperrt_einfuegen = "Das Uno-Projekt wird gerade eingefügt – einen Moment."
 gesperrt_titel = "Der Titel wird gerade geändert – einen Moment."
+gesperrt_twitch_client_id = "Zuerst die Client-ID von Twitch in einstellungen.toml bei [twitch] client_id eintragen und OpenRegie neu starten (siehe README „Twitch einrichten“)."
 
 # Uno-Projekte einrichten
 uno_ueberschrift = "Uno-Projekte"

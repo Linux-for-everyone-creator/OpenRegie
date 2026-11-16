@@ -2,6 +2,35 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.1.1 – Alles passt auf den Bildschirm · 16.11.2026
+
+**Behoben**
+- Auf niedrigen Bildschirmen (z. B. 1080 Pixel mit OBS-Meldung oben) lag der grüne Start-Knopf über
+  der Countdown-Zeit, man konnte sie kaum anklicken. Das Fenster brauchte über 1100 Pixel Höhe, jetzt
+  höchstens 790 – auf einem 1080er-Bildschirm passt alles ohne Rollen, Knöpfe und Schrift sind gleich
+  groß geblieben:
+  - Die OBS-Meldung („OBS wurde unerwartet beendet …“) steht jetzt in der Mitte unter „Live-Bild“
+    statt über allen drei Spalten.
+  - Rechts steht „Im Stream“/„Ausgeblendet“ in einer Zeile mit „AUSGEWÄHLT“.
+  - Die Überschrift „Dauer“ über −10/−1/+1/+10 Min ist weg (die Knöpfe sagen es selbst).
+  - Die Texte-Fläche nimmt nur so viel Platz, wie das erste Feld braucht.
+  - Ein Hinweis unter der Countdown-Zeit steht kurz an Stelle von „Bereit“/„Läuft“.
+  - Nur wenn ein Bildschirm noch kleiner ist, erscheint rechts ein breiter Rollbalken – statt dass
+    sich etwas überlappt. Einblenden/Ausblenden bleiben immer zu sehen.
+
+**Geändert**
+- Mit Twitch anmelden: Der Knopf ist jetzt immer zu sehen. Fehlt die Client-ID in
+  `einstellungen.toml`, ist er ausgegraut und sagt, was zu tun ist (vorher war er dann unsichtbar).
+  Damit haben jetzt alle 10 Knöpfe, die gesperrt werden können, einen Hinweis.
+- Die öffentliche Client-ID der OpenRegie-App bei Twitch ist in `einstellungen.toml` eingetragen.
+
+**Geprüft**
+- 199 automatische Tests, alle ohne Fehler.
+- Neuer Test baut Kevins Fenster nach (1903 × 971, OBS-Meldung mit „OBS starten“/„Neu verbinden“) und
+  prüft: kein Rollbalken, auch nicht mit zweizeiligem Hinweis unter der Zeit. Mit dem alten Stand
+  schlägt er fehl.
+- Aussehen mit Standbildern geprüft.
+
 ## Build 1.1 – Ausgegraute Knöpfe sagen, warum · 16.11.2026
 
 **Neu**

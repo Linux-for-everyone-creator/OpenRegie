@@ -96,6 +96,8 @@ class Hauptfenster(QMainWindow):
         haupt.addLayout(inhalt, 1)
 
         # --- Meldungsleiste (nur sichtbar, wenn etwas nicht stimmt) --------
+        # Sitzt in der Mitte unter „Live-Bild“ (es geht ja um OBS) – nicht über allen Spalten,
+        # sonst fehlt rechts die Höhe für Countdown und Knöpfe.
         self.meldungsleiste = flaeche()
         ml = QHBoxLayout(self.meldungsleiste)
         ml.setContentsMargins(g.abstand, g.abstand // 2, g.abstand, g.abstand // 2)
@@ -111,7 +113,6 @@ class Hauptfenster(QMainWindow):
         self.knopf_neu.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.knopf_neu.clicked.connect(self.verbindung.jetzt_neu_verbinden)
         ml.addWidget(self.knopf_neu)
-        inhalt.addWidget(self.meldungsleiste)
 
         # --- Mitte: Bibliothek | Live-Bild + Twitch | Ausgewählt -------------
         reihe = QHBoxLayout()
@@ -135,6 +136,7 @@ class Hauptfenster(QMainWindow):
         self.szenenname = beschriftung("", "gedimmt")
         szenenzeile.addWidget(self.szenenname)
         spalte.addLayout(szenenzeile)
+        spalte.addWidget(self.meldungsleiste)
         self.vorschaubild = VorschauBild(E)
         spalte.addWidget(self.vorschaubild, 1)
 

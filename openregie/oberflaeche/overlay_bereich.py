@@ -81,6 +81,11 @@ class _Meldung(QLabel):
         self._uhr = QTimer(self)
         self._uhr.setSingleShot(True)
         self._uhr.timeout.connect(self._kurz_vorbei)
+        self.hoehe_selbst_gesetzt = False  # True: Höhe kommt von außen, nicht „hängt von der Breite ab“
+
+    def hasHeightForWidth(self) -> bool:
+        # (Qt stellt das bei jedem neuen Text selbst wieder ein – darum hier statt über die SizePolicy)
+        return False if self.hoehe_selbst_gesetzt else super().hasHeightForWidth()
 
     def zeigen(self, text: str, erfolg: bool | None = None) -> None:
         self._uhr.stop()  # eine echte Rückmeldung ersetzt den kurzen Hinweis
@@ -458,21 +463,32 @@ class OverlayBedienfeld(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(g.abstand)
+        # Kopf: „AUSGEWÄHLT“ und daneben rechts die Lampe (Im Stream / Ausgeblendet), darunter der Name.
+        # Lampe und Überschrift teilen sich eine Zeile – das spart Höhe für die großen Knöpfe.
         kopf = QVBoxLayout()
         kopf.setSpacing(2)
-        kopf.addWidget(beschriftung(t.ausgewaehlt, "kleinueberschrift"))
+        zustand = QHBoxLayout()
+        zustand.setSpacing(10)
+        zustand.addWidget(beschriftung(t.ausgewaehlt, "kleinueberschrift"), 1)
+        self.tally = Lampe(20, E.farben.tally_aus)
+        zustand.addWidget(self.tally)
+        self.tally_text = beschriftung("", "tally_text")
+        zustand.addWidget(self.tally_text)
+        kopf.addLayout(zustand)
         self.name = beschriftung("", "ueberschrift")
         self.name.setWordWrap(True)
         kopf.addWidget(self.name)
         lay.addLayout(kopf)
 
-        zustand = QHBoxLayout()
-        zustand.setSpacing(10)
-        self.tally = Lampe(20, E.farben.tally_aus)
-        zustand.addWidget(self.tally)
-        self.tally_text = beschriftung("", "tally_text")
-        zustand.addWidget(self.tally_text, 1)
-        lay.addLayout(zustand)
+        # Countdown und Texte liegen in einer Rollfläche zwischen Kopf und den großen Knöpfen unten:
+        # Ist der Bildschirm zu niedrig, erscheint ein Rollbalken – statt dass sich alles überlappt.
+        # Kopf und Einblenden/Ausblenden bleiben immer sichtbar.
+        self.mitte = QWidget()
+        ml = QVBoxLayout(self.mitte)
+        ml.setContentsMargins(0, 0, 0, 0)
+        ml.setSpacing(g.abstand)
+        self.mitte_flaeche = _scrollflaeche(self.mitte)
+        lay.addWidget(self.mitte_flaeche, 1)
 
         # --- Countdown (nur bei Overlays mit Zeitgeber) ---------------------
         self.countdown = QWidget()
@@ -521,6 +537,9 @@ class OverlayBedienfeld(QWidget):
         self.zeit_eingabe.hoehe = hoehe
         self.meldung_zeit = meldung()  # Hinweise zur eingetippten Zeit
         self.meldung_zeit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Die Höhe setzt _hinweis_zeit selbst. Meldet der umbrechende Text „Höhe hängt von der Breite ab“,
+        # rechnet Qt die ganze Spalte mit Wunschhöhen statt Mindesthöhen – und zeigt unnötig einen Rollbalken.
+        self.meldung_zeit.hoehe_selbst_gesetzt = True
         cl.addWidget(self.meldung_zeit)
         self._meldung_zeit_uhr = QTimer(self)  # Hinweis „gesperrt“ verschwindet von selbst
         self._meldung_zeit_uhr.setSingleShot(True)
@@ -539,7 +558,6 @@ class OverlayBedienfeld(QWidget):
         for k in (self.start, self.pause, self.zurueck):
             reihe.addWidget(k)
         cl.addLayout(reihe)
-        cl.addWidget(beschriftung(t.countdown_dauer, "feldname"))
         dauer = QHBoxLayout()
         dauer.setSpacing(g.abstand // 2)
         self.dauer_knoepfe = {}
@@ -549,20 +567,21 @@ class OverlayBedienfeld(QWidget):
             dauer.addWidget(k)
             self.dauer_knoepfe[schritt] = k
         cl.addLayout(dauer)
-        lay.addWidget(self.countdown)
+        ml.addWidget(self.countdown)
 
         # --- Texte -----------------------------------------------------------
         self.texte = QWidget()  # wird ausgeblendet, wenn das Uno keine Texte kann
         tx = QVBoxLayout(self.texte)
         tx.setContentsMargins(0, 0, 0, 0)
-        tx.setSpacing(g.abstand)
+        tx.setSpacing(g.abstand // 2)  # Überschrift, Felder und Knöpfe gehören zusammen
         self.texte_kopf = beschriftung(t.overlay_texte, "kleinueberschrift")
         tx.addWidget(self.texte_kopf)
         innen = QWidget()
         self._felder_lay = QVBoxLayout(innen)
         self._felder_lay.setContentsMargins(0, 0, 8, 0)
         self._felder_lay.setSpacing(6)
-        tx.addWidget(_scrollflaeche(innen), 1)
+        self._texte_flaeche = _scrollflaeche(innen)
+        tx.addWidget(self._texte_flaeche, 1)
         texte_reihe = QHBoxLayout()
         texte_reihe.setSpacing(g.abstand // 2)
         self.knopf_uebernehmen = knopf(t.knopf_texte_uebernehmen)
@@ -574,7 +593,7 @@ class OverlayBedienfeld(QWidget):
         tx.addLayout(texte_reihe)
         self.meldung_texte = meldung()
         tx.addWidget(self.meldung_texte)
-        lay.addWidget(self.texte, 1)
+        ml.addWidget(self.texte, 1)
         self._felder_da = False  # sind die Eingabefelder schon aufgebaut?
 
         # --- Einblenden / Ausblenden (unten, groß) ----------------------------
@@ -765,6 +784,9 @@ class OverlayBedienfeld(QWidget):
         # Umbrochener Text: Qt rechnet sonst nur mit einer Zeile und schiebt ihn über die große Zeit
         breite = self.countdown.width() or self.width()
         self.meldung_zeit.setMinimumHeight(self.meldung_zeit.heightForWidth(breite) if text and breite > 0 else 0)
+        # Der Hinweis nimmt den Platz der Zustandszeile („Bereit“, „Läuft“) ein – so passt auch ein
+        # zweizeiliger Hinweis, ohne dass die Spalte zu hoch wird. Danach ist der Zustand wieder da.
+        self.countdown_zustand.setVisible(not text)
         if text and von_selbst_weg:
             self._meldung_zeit_uhr.start(self.HINWEIS_MS)
 
@@ -902,6 +924,11 @@ class OverlayBedienfeld(QWidget):
             hinweis.setWordWrap(True)
             self._felder_lay.addWidget(hinweis)
         self._felder_lay.addStretch(1)
+        # Mindestens das erste Feld ganz zeigen (Name + Eingabe) – nicht mehr. Weitere Felder: rollen.
+        # Ohne das nimmt Qt pauschal ~130 Pixel und schiebt die Knöpfe aus dem Bild.
+        erste = [self._felder_lay.itemAt(i).widget() for i in range(min(2, self._felder_lay.count()))]
+        hoehe = sum(w.sizeHint().height() for w in erste if w is not None)
+        self._texte_flaeche.setMinimumHeight(hoehe + self._felder_lay.spacing() if hoehe else 0)
         self.knopf_uebernehmen.setEnabled(bool(felder))
 
     def eingabe(self, kennung: str) -> QLineEdit:
