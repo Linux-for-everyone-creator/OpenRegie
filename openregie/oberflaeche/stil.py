@@ -39,6 +39,12 @@ def stylesheet(E) -> str:
     QLabel#uhr {{ font-size: {g.schrift_uhr}px; font-weight: 700; color: {f.text}; }}
     QLabel#gedimmt {{ color: {f.text_gedimmt}; font-size: {g.schrift_klein}px; }}
     QLabel#meldung {{ color: {f.text}; font-size: {g.schrift}px; }}
+    /* Hinweis beim Drüberfahren (z. B. warum ein Knopf ausgegraut ist): gut lesbar */
+    QToolTip {{
+        background-color: {f.knopf_hover}; color: {f.knopf_text};
+        border: 2px solid {f.knopf_hover_rahmen}; border-radius: 6px;
+        padding: 6px 10px; font-size: {g.schrift}px;
+    }}
     QLabel#build {{ color: {f.build_text}; font-size: {g.schrift_klein}px; }}
     QLabel#gut {{ color: {f.meldung_gut}; font-size: {g.schrift}px; }}
     QLabel#fehler {{ color: {f.meldung_fehler}; font-size: {g.schrift}px; }}

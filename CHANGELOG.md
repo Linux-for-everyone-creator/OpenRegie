@@ -2,6 +2,49 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.1 – Ausgegraute Knöpfe sagen, warum · 16.11.2026
+
+**Neu**
+- Ein ausgegrauter Knopf sagt jetzt, warum er gerade nicht geht:
+  - **Drüberfahren mit der Maus:** kleiner, gut lesbarer Hinweis (gleiche Schriftgröße wie die Knöpfe,
+    gelber Rahmen). Der Mauszeiger wird zum „Verboten“-Zeichen.
+  - **Anklicken:** dieselbe kurze Meldung erscheint beim Knopf und verschwindet nach 4 Sekunden von
+    selbst. Stand dort vorher eine andere Meldung (z. B. ein Fehler von Uno), ist sie danach wieder da.
+    Der Klick löst sonst nichts aus.
+- Der Grund passt immer zum gerade aktuellen Zustand, z. B.:
+  - Pause: „Pause geht nur, während der Countdown läuft.“
+  - Start: „Der Countdown läuft schon.“ bzw. „Der Countdown ist abgelaufen. Erst „Zurück“ drücken,
+    dann „Start“.“
+  - Einblenden/Ausblenden: „Ist schon eingeblendet.“ / „Ist schon ausgeblendet.“ / „Wird gerade
+    umgeschaltet – einen Moment.“
+  - Texte übernehmen / Neu laden: „…werden gerade übernommen/geladen“, „Dieses Overlay hat keine Texte
+    zum Ändern.“
+  - −10/−1/+1/+10 Min: „Bei diesem Overlay lässt sich die Dauer nicht einstellen.“
+  - Gleich nach dem Start: „Uno wird noch gelesen – einen Moment.“
+  - Aus Zwischenablage einfügen, Titel ändern (Twitch): „…wird gerade eingefügt/geändert“.
+- Alle Texte stehen in `einstellungen.toml` (`gesperrt_…`).
+- Freie Knöpfe verhalten sich genau wie vorher.
+
+**Hinweis:** Zurzeit gibt es keine Knöpfe für Funktionen, die noch nicht fertig sind. Alle ausgegrauten
+Knöpfe gehören zu fertigen Funktionen und sind nur im Moment gesperrt. Alle 9, die gesperrt werden
+können, haben jetzt einen Hinweis.
+
+**Behoben (beim Prüfen gefunden)**
+- Ist der Countdown abgelaufen, meldet Uno ihn weiter als „läuft“. Der Hinweis am Start-Knopf hätte
+  deshalb „läuft schon“ gesagt – jetzt sagt er richtig „abgelaufen, erst Zurück drücken“.
+
+**Geprüft**
+- 195 automatische Tests (13 neu), dreimal hintereinander ohne Fehler; die neuen zusätzlich
+  15-mal, drei gleichzeitig unter Last.
+- **Kein Knopf vergessen:** Ein Test liest den Programmtext und findet jede Stelle, an der ein Knopf
+  gesperrt wird – jeder davon muss einen Hinweis haben. Ein zweiter Test geht durch viele Zustände
+  (bereit, läuft, abgelaufen, im Stream, schaltet gerade, Uno wird gelesen, Texte laden/übernehmen,
+  Uno einfügen) und prüft jeden sichtbaren ausgegrauten Knopf im ganzen Fenster: Hinweis da, passend
+  (nicht nur „geht gerade nicht“), Mauszeiger „Verboten“.
+- Gegenprobe: Hinweis an „Pause“ entfernt → beide Tests schlagen fehl; einen neuen gesperrten Knopf
+  ohne Hinweis eingebaut → der Programmtext-Test schlägt fehl.
+- Aussehen mit Standbildern geprüft.
+
 ## Build 1.1 – Countdown-Zeit direkt eintippen · 16.11.2026
 
 **Neu**

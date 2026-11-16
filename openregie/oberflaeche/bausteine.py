@@ -1,10 +1,13 @@
-"""Wiederverwendbare Bausteine: großer Knopf, Lampe, Logo, Pillen (OBS-Status, ON AIR), Vorschaubild."""
+"""Wiederverwendbare Bausteine: großer Knopf (mit Hinweis, wenn gesperrt), Lampe, Logo, Pillen (OBS-Status,
+ON AIR), Vorschaubild."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt
+from typing import Callable
+
+from PySide6.QtCore import QEvent, QObject, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QWidget
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QToolTip, QWidget
 
 from ..obs.verbindung import Sendung, Status
 
@@ -20,6 +23,62 @@ def knopf(text: str, name: str = "") -> QPushButton:
     k.setFocusPolicy(Qt.FocusPolicy.TabFocus)
     k.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     return k
+
+
+class _GesperrtHinweis(QObject):
+    """Ein ausgegrauter Knopf sagt, warum er gerade nicht geht:
+    beim Drüberfahren als kleiner Hinweis, beim Anklicken als kurze Meldung (über `melden`).
+    Ist der Knopf frei, ändert sich nichts."""
+
+    def __init__(self, k: QPushButton, grund: Callable[[], str], melden: Callable[[str], None]):
+        super().__init__(k)
+        self.knopf, self.grund, self.melden = k, grund, melden
+        k.installEventFilter(self)
+        self._zeiger()
+
+    def text(self) -> str:
+        return self.grund() or ""
+
+    def _zeiger(self) -> None:
+        k = self.knopf
+        k.setCursor(Qt.CursorShape.PointingHandCursor if k.isEnabled() else Qt.CursorShape.ForbiddenCursor)
+
+    def eventFilter(self, obj, e) -> bool:
+        typ = e.type()
+        if typ == QEvent.Type.EnabledChange:
+            self._zeiger()
+            return False
+        if self.knopf.isEnabled():
+            return False
+        if typ == QEvent.Type.ToolTip:
+            text = self.text()
+            if text:
+                QToolTip.showText(e.globalPos(), text, self.knopf)
+            else:
+                QToolTip.hideText()
+            return True
+        if typ in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick):
+            return True  # nicht an das Fenster dahinter weiterreichen
+        if typ == QEvent.Type.MouseButtonRelease:
+            if e.button() == Qt.MouseButton.LeftButton and self.knopf.rect().contains(e.position().toPoint()):
+                text = self.text()
+                if text:
+                    self.melden(text)
+            return True
+        return False
+
+
+def gesperrt_hinweis(k: QPushButton, grund: Callable[[], str], melden: Callable[[str], None]) -> QPushButton:
+    """Hängt an einen Knopf, was er sagt, wenn er ausgegraut ist. `grund()` liefert den Text passend
+    zum gerade aktuellen Zustand, `melden(text)` zeigt ihn nach einem Klick kurz an."""
+    k._gesperrt_hinweis = _GesperrtHinweis(k, grund, melden)
+    return k
+
+
+def gesperrt_text(k: QPushButton) -> str:
+    """Was ein (gesperrter) Knopf gerade sagen würde – "" ohne Hinweis (z. B. für Tests)."""
+    h = getattr(k, "_gesperrt_hinweis", None)
+    return h.text() if h else ""
 
 
 def flaeche(name: str = "flaeche") -> QFrame:

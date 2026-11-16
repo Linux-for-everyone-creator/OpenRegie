@@ -259,6 +259,23 @@ meldung_countdown_ueber_59 = "Nach dem Doppelpunkt geht es nur bis 59. Zum Beisp
 meldung_countdown_null = "Die Zeit muss länger als 0 Sekunden sein."
 meldung_countdown_zu_lang = "So lang geht nicht. Höchstens {hoechstens}."
 
+# Ausgegraute Knöpfe sagen, warum (beim Drüberfahren und beim Anklicken)
+gesperrt_uno_laedt = "Uno wird noch gelesen – einen Moment."
+gesperrt_moment = "Geht gerade nicht – einen Moment."
+gesperrt_kein_ein_aus = "Dieses Overlay lässt sich von hier nicht ein- und ausblenden."
+gesperrt_schaltet = "Wird gerade umgeschaltet – einen Moment."
+gesperrt_schon_ein = "Ist schon eingeblendet."
+gesperrt_schon_aus = "Ist schon ausgeblendet."
+gesperrt_start_laeuft = "Der Countdown läuft schon."
+gesperrt_start_abgelaufen = "Der Countdown ist abgelaufen. Erst „Zurück“ drücken, dann „Start“."
+gesperrt_pause = "Pause geht nur, während der Countdown läuft."
+gesperrt_keine_dauer = "Bei diesem Overlay lässt sich die Dauer nicht einstellen."
+gesperrt_texte_laden = "Die Texte werden gerade geladen – einen Moment."
+gesperrt_texte_senden = "Die Texte werden gerade übernommen – einen Moment."
+gesperrt_keine_texte = "Dieses Overlay hat keine Texte zum Ändern."
+gesperrt_einfuegen = "Das Uno-Projekt wird gerade eingefügt – einen Moment."
+gesperrt_titel = "Der Titel wird gerade geändert – einen Moment."
+
 # Uno-Projekte einrichten
 uno_ueberschrift = "Uno-Projekte"
 uno_erklaerung = "So kommt ein Uno-Projekt in OpenRegie:\n1. In Overlays.uno das Projekt öffnen.\n2. Oben rechts im Menü „API Description“ wählen.\n3. Die Adresse kopieren.\n4. Hier auf „Aus Zwischenablage einfügen“ klicken."

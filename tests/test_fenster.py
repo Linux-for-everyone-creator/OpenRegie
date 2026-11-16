@@ -2,9 +2,13 @@
 
 import unittest
 
-from PySide6.QtCore import Qt
+import re
+from pathlib import Path
+
+from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtGui import QHelpEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QPushButton
+from PySide6.QtWidgets import QApplication, QPushButton, QToolTip
 
 from openregie import einstellungen
 from openregie.geheimspeicher import Arbeitsspeicher
@@ -15,6 +19,8 @@ from openregie.oberflaeche.hauptfenster import Hauptfenster
 from openregie.twitch.konto import Anmeldung, TwitchKonto
 from openregie.uno.verwaltung import UnoVerwaltung
 
+from openregie.oberflaeche import overlay_bereich
+from openregie.oberflaeche.bausteine import gesperrt_text
 from openregie.oberflaeche.overlay_bereich import AUS, BEREIT, LIVE
 
 from .falsches_internet import (CONTENT, EINZEL_ADRESSE_TEXT, EINZEL_TOKEN, UNO_ADRESSE_TEXT, UNO_TOKEN,
@@ -762,8 +768,238 @@ class NeustartTest(Grundlage):
         self.assertTrue(warte_bis(lambda: self.netz.overlays[0]["visible"], 3000))
 
 
+class GesperrteKnoepfeTest(Grundlage):
+    """Ausgegraute Knöpfe sagen, warum: beim Drüberfahren (Hinweis) und beim Anklicken (kurze Meldung)."""
+    mit_uno = False
+
+    def setUp(self):
+        super().setUp()
+        self.e = self.netz.einzel
+        e = self.f.uno_einrichtung
+        e._zwischenablage = lambda: EINZEL_ADRESSE_TEXT
+        klick(e.einfuegen)
+        self.assertTrue(warte_bis(lambda: e.meldung.text() == self.E.texte.meldung_uno_einzel_ok, 3000))
+        klick(e.zurueck)
+        self.b = self.f.overlay_bedienfeld
+        self.assertTrue(warte_bis(lambda: self.b.overlay is not None and self.b.countdown.isVisible()
+                                  and self.b.eingaben and self.b.knopf_texte_neu.isEnabled(), 3000))
+        QToolTip.hideText()
+
+    def tearDown(self):
+        QToolTip.hideText()
+        super().tearDown()
+
+    def hinweis_beim_drueberfahren(self, k):
+        """Was Qt beim Drüberfahren anzeigt (das Hinweis-Ereignis, das Qt nach kurzem Stillhalten schickt)."""
+        QToolTip.hideText()
+        self.assertTrue(warte_bis(lambda: not QToolTip.isVisible(), 2000))  # Qt schließt mit kurzer Verzögerung
+        punkt = k.rect().center()
+        QApplication.sendEvent(k, QHelpEvent(QEvent.Type.ToolTip, punkt, k.mapToGlobal(punkt)))
+        return QToolTip.text() if QToolTip.isVisible() else ""
+
+    def alle_gesperrten_sagen_warum(self, zustand):
+        """Kein sichtbarer ausgegrauter Knopf im ganzen Fenster bleibt stumm."""
+        gefunden = 0
+        for k in self.f.findChildren(QPushButton):
+            if k.isVisible() and not k.isEnabled():
+                gefunden += 1
+                text = gesperrt_text(k)
+                self.assertTrue(text, f"{zustand}: „{k.text()}“ ist ausgegraut und sagt nicht, warum")
+                self.assertNotEqual(text, self.E.texte.gesperrt_moment, f"{zustand}: „{k.text()}“ zu allgemein")
+                self.assertEqual(self.hinweis_beim_drueberfahren(k), text, f"{zustand}: {k.text()}")
+                self.assertEqual(k.cursor().shape(), Qt.CursorShape.ForbiddenCursor, k.text())
+        return gefunden
+
+    # --- Kein Knopf vergessen ----------------------------------------------------
+    def test_jeder_knopf_der_ausgegraut_werden_kann_hat_einen_hinweis(self):
+        """Liest den Programmtext: Jeder Knopf, der irgendwo gesperrt wird, muss einen Hinweis haben."""
+        ordner = Path(overlay_bereich.__file__).parent
+        besitzer = [self.b, self.f.uno_einrichtung, self.f.twitch_bereich, self.f.bibliothek, self.f]
+        namen, gruppen = set(), set()
+        for datei in sorted(ordner.glob("*.py")):
+            text = datei.read_text()
+            namen |= set(re.findall(r"self\.(\w+)\.set(?:Enabled|Disabled)\(", text))
+            for liste, rumpf in re.findall(r"for \w+ in ([^\n]+):\n((?:[ ]{12,}.*\n){1,3})", text):
+                if "setEnabled" in rumpf or "setDisabled" in rumpf:
+                    namen |= set(re.findall(r"self\.(\w+)", liste))
+        self.assertGreaterEqual(len(namen), 9, namen)  # alle Stellen gefunden (Stand Build 1.1: 9)
+        for name in sorted(namen):
+            ziel = next((getattr(o, name) for o in besitzer if hasattr(o, name)), None)
+            self.assertIsNotNone(ziel, name)
+            knoepfe = list(ziel.values()) if isinstance(ziel, dict) else [ziel]
+            for k in knoepfe:
+                self.assertTrue(hasattr(k, "_gesperrt_hinweis"), f"{name} („{k.text()}“) hat keinen Hinweis")
+
+    def test_in_jedem_zustand_sagen_alle_gesperrten_warum(self):
+        t = self.E.texte
+        n = self.alle_gesperrten_sagen_warum("ausgeblendet, bereit")
+        self.assertEqual(n, 2)  # Pause und Ausblenden
+        klick(self.b.start)
+        self.assertTrue(warte_bis(lambda: self.b.pause.isEnabled(), 3000))
+        self.alle_gesperrten_sagen_warum("Countdown läuft")
+        klick(self.b.einblenden)
+        self.assertTrue(warte_bis(lambda: self.b.overlay.sichtbar is True and self.b.ausblenden.isEnabled(), 3000))
+        self.alle_gesperrten_sagen_warum("im Stream")
+        self.b.overlay.beschaeftigt = True
+        self.b._zustand_zeigen()
+        self.alle_gesperrten_sagen_warum("schaltet gerade")
+        self.b.overlay.beschaeftigt = False
+        self.b._zustand_zeigen()
+        self.b.texte_laden()
+        self.alle_gesperrten_sagen_warum("Texte werden geladen")
+        self.assertTrue(warte_bis(lambda: self.b.knopf_texte_neu.isEnabled(), 3000))
+        self.b.eingabe("Message").setText("Neu")
+        self.netz.verzoegerung = 3.0  # Uno antwortet langsam: Knopf bleibt solange gesperrt
+        klick(self.b.knopf_uebernehmen)
+        self.assertEqual(gesperrt_text(self.b.knopf_uebernehmen), t.gesperrt_texte_senden)
+        self.assertGreaterEqual(self.alle_gesperrten_sagen_warum("Texte werden übernommen"), 1)
+        self.netz.verzoegerung = 0.0
+        self.assertTrue(warte_bis(lambda: self.b.knopf_uebernehmen.isEnabled(), 6000))
+
+    # --- Die einzelnen Gründe ----------------------------------------------------
+    def test_ausblenden_wenn_schon_ausgeblendet(self):
+        t = self.E.texte
+        k = self.b.ausblenden
+        self.assertFalse(k.isEnabled())
+        self.assertEqual(self.hinweis_beim_drueberfahren(k), t.gesperrt_schon_aus)
+        self.assertEqual(k.cursor().shape(), Qt.CursorShape.ForbiddenCursor)
+        vorher = len(self.netz.einzel_befehle)
+        QTest.mouseClick(k, Qt.MouseButton.LeftButton)
+        self.assertTrue(self.b.meldung_schalter.isVisible())
+        self.assertEqual(self.b.meldung_schalter.text(), t.gesperrt_schon_aus)
+        self.assertEqual(self.b.meldung_schalter.objectName(), "meldung")  # Hinweis, kein roter Fehler
+        warte(300)
+        self.assertEqual(len(self.netz.einzel_befehle), vorher)  # nichts an Uno geschickt
+        self.assertFalse(self.b.overlay.sichtbar)
+        # verschwindet von selbst
+        self.assertTrue(warte_bis(lambda: not self.b.meldung_schalter.isVisible(), overlay_bereich.HINWEIS_MS + 1500))
+        # Einblenden: jetzt ist Einblenden gesperrt, Ausblenden frei – und ohne Sperr-Hinweis
+        klick(self.b.einblenden)
+        self.assertTrue(warte_bis(lambda: self.b.ausblenden.isEnabled(), 3000))
+        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.einblenden), t.gesperrt_schon_ein)
+        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.ausblenden), "")
+        self.assertEqual(self.b.ausblenden.cursor().shape(), Qt.CursorShape.PointingHandCursor)
+        klick(self.b.ausblenden)  # freier Knopf wirkt ganz normal
+        self.assertTrue(warte_bis(lambda: self.b.overlay.sichtbar is False, 3000))
+
+    def test_waehrend_umgeschaltet_wird(self):
+        self.b.overlay.beschaeftigt = True
+        self.b._zustand_zeigen()
+        for k in (self.b.einblenden, self.b.ausblenden):
+            self.assertFalse(k.isEnabled())
+            self.assertEqual(gesperrt_text(k), self.E.texte.gesperrt_schaltet)
+
+    def test_pause_und_start(self):
+        t = self.E.texte
+        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.pause), t.gesperrt_pause)
+        QTest.mouseClick(self.b.pause, Qt.MouseButton.LeftButton)
+        self.assertEqual(self.b.meldung_zeit.text(), t.gesperrt_pause)
+        self.assertEqual(self.b.meldung_zeit.objectName(), "meldung")
+        self.assertTrue(self.b.meldung_zeit.isVisible())
+        self.assertFalse(self.e.werte[CONTENT]["Timer"].get("isRunning"))
+        klick(self.b.start)
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_laeuft, 3000))
+        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.start), t.gesperrt_start_laeuft)
+        QTest.mouseClick(self.b.start, Qt.MouseButton.LeftButton)
+        self.assertEqual(self.b.meldung_zeit.text(), t.gesperrt_start_laeuft)
+        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.pause), "")  # frei
+        self.assertTrue(warte_bis(lambda: not self.b.meldung_zeit.isVisible(), overlay_bereich.HINWEIS_MS + 1500))
+
+    def test_start_wenn_abgelaufen(self):
+        t = self.E.texte
+        QTest.mouseClick(self.b.zeit, Qt.MouseButton.LeftButton)
+        QTest.keyClicks(self.b.zeit_eingabe, "0:01")
+        QTest.keyClick(self.b.zeit_eingabe, Qt.Key.Key_Return)
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 1, 3000))
+        klick(self.b.start)
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_abgelaufen, 4000))
+        self.assertFalse(self.b.start.isEnabled())
+        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.start), t.gesperrt_start_abgelaufen)
+        QTest.mouseClick(self.b.start, Qt.MouseButton.LeftButton)
+        self.assertEqual(self.b.meldung_zeit.text(), t.gesperrt_start_abgelaufen)
+        self.alle_gesperrten_sagen_warum("abgelaufen")
+
+    def test_dauer_knoepfe_ohne_dauer(self):
+        self.b.overlay.bauplan.dauer = ""
+        self.b._zustand_zeigen()
+        for k in self.b.dauer_knoepfe.values():
+            self.assertFalse(k.isEnabled())
+            self.assertEqual(self.hinweis_beim_drueberfahren(k), self.E.texte.gesperrt_keine_dauer)
+
+    def test_texte_knoepfe(self):
+        t = self.E.texte
+        self.b.texte_laden()
+        self.assertFalse(self.b.knopf_texte_neu.isEnabled())
+        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.knopf_texte_neu), t.gesperrt_texte_laden)
+        QTest.mouseClick(self.b.knopf_texte_neu, Qt.MouseButton.LeftButton)
+        self.assertEqual(self.b.meldung_texte.text(), t.gesperrt_texte_laden)
+        self.assertTrue(warte_bis(lambda: self.b.knopf_texte_neu.isEnabled(), 3000))
+        # Overlay ganz ohne Texte
+        self.b._felder_aufbauen([], t.overlay_keine_texte)
+        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.knopf_uebernehmen), t.gesperrt_keine_texte)
+
+    def test_uno_noch_nicht_gelesen(self):
+        o = self.b.overlay
+        o.bauplan, alt = None, o.bauplan
+        self.b._zustand_zeigen()
+        for k in (self.b.einblenden, self.b.ausblenden, self.b.knopf_uebernehmen, self.b.knopf_texte_neu):
+            self.assertFalse(k.isEnabled())
+            self.assertEqual(gesperrt_text(k), self.E.texte.gesperrt_uno_laedt, k.text())
+        self.alle_gesperrten_sagen_warum("Uno wird gelesen")
+        o.bauplan = alt
+
+    def test_uno_einfuegen_waehrend_eingefuegt_wird(self):
+        t = self.E.texte
+        e = self.f.uno_einrichtung
+        self.f.bibliothek.knopf_einrichten.click()
+        self.assertTrue(warte_bis(lambda: e.isVisible(), 2000))
+        e.einfuegen.setEnabled(False)  # wie während des Einfügens
+        e.meldung.zeigen("…")
+        self.assertEqual(self.hinweis_beim_drueberfahren(e.einfuegen), t.gesperrt_einfuegen)
+        QTest.mouseClick(e.einfuegen, Qt.MouseButton.LeftButton)
+        self.assertEqual(e.meldung.text(), t.gesperrt_einfuegen)
+        self.alle_gesperrten_sagen_warum("Uno wird eingefügt")
+        # danach steht wieder da, was vorher da stand
+        self.assertTrue(warte_bis(lambda: e.meldung.text() == "…", overlay_bereich.HINWEIS_MS + 1500))
+        e.einfuegen.setEnabled(True)
+
+    def test_echtes_drueberfahren_mit_der_maus(self):
+        k = self.b.ausblenden
+        QTest.mouseMove(self.f, self.f.mapFromGlobal(k.mapToGlobal(QPoint(5, 5))))
+        QTest.mouseMove(k, k.rect().center())
+        self.assertTrue(warte_bis(lambda: QToolTip.isVisible(), 3000), "kein Hinweis beim Drüberfahren")
+        self.assertEqual(QToolTip.text(), self.E.texte.gesperrt_schon_aus)
+
+    # --- Die kurze Meldung ---------------------------------------------------------
+    def test_kurze_meldung_verdeckt_keine_echte_meldung(self):
+        m = self.b.meldung_schalter
+        m.zeigen("Uno antwortet nicht.", False)
+        m.kurz_zeigen("Ist schon ausgeblendet.", 200)
+        self.assertEqual(m.objectName(), "meldung")
+        m.kurz_zeigen("Ist schon ausgeblendet.", 200)  # zweimal geklickt: merkt sich trotzdem das Original
+        self.assertTrue(warte_bis(lambda: m.text() == "Uno antwortet nicht.", 2000))
+        self.assertEqual(m.objectName(), "fehler")  # wieder rot wie vorher
+        # Kommt währenddessen eine echte Rückmeldung, bleibt die stehen
+        m.zeigen("")
+        m.kurz_zeigen("Ist schon ausgeblendet.", 200)
+        m.zeigen("Eingeblendet.", True)
+        warte(400)
+        self.assertEqual(m.text(), "Eingeblendet.")
+        self.assertEqual(m.objectName(), "gut")
+
+
 class TwitchFensterTest(Grundlage):
     mit_uno = False
+
+    def test_titel_knopf_gesperrt_sagt_warum(self):
+        tb = self.f.twitch_bereich
+        tb.uebernehmen.setEnabled(False)  # wie während der Titel geändert wird
+        punkt = tb.uebernehmen.rect().center()
+        QApplication.sendEvent(tb.uebernehmen, QHelpEvent(QEvent.Type.ToolTip, punkt, tb.uebernehmen.mapToGlobal(punkt)))
+        self.assertEqual(gesperrt_text(tb.uebernehmen), self.E.texte.gesperrt_titel)
+        QTest.mouseClick(tb.uebernehmen, Qt.MouseButton.LeftButton)
+        self.assertEqual(tb.meldung.text(), self.E.texte.gesperrt_titel)
+        QToolTip.hideText()
 
     def test_anmelden_und_titel_aendern(self):
         tb = self.f.twitch_bereich

@@ -12,7 +12,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QSizePolicy, QVBoxLayout, QWidget
 
 from ..twitch.konto import TITEL_HOECHSTLAENGE, Anmeldung, TwitchKonto
-from .bausteine import beschriftung, knopf
+from .bausteine import beschriftung, gesperrt_hinweis, knopf
 from .overlay_bereich import meldung
 
 
@@ -79,6 +79,7 @@ class TwitchBereich(QWidget):
 
         self.meldung = meldung()
         lay.addWidget(self.meldung)
+        gesperrt_hinweis(self.uebernehmen, lambda: t.gesperrt_titel, self.meldung.kurz_zeigen)
 
         konto.anmeldung_geaendert.connect(self._zustand)
         konto.code_bereit.connect(self._code)

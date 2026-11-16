@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QAbstractButton, QButtonGroup, QFrame, QGridLayou
 
 from ..uno import einzel
 from ..uno.verwaltung import COUNTDOWN, EIN_AUS, TEXTE, Overlay, UnoProjekt, UnoVerwaltung
-from .bausteine import Lampe, beschriftung, knopf
+from .bausteine import Lampe, beschriftung, gesperrt_hinweis, knopf
 
 LIVE, BEREIT, AUS = "live", "bereit", "aus"
 
@@ -69,11 +69,38 @@ def _neu_zeichnen(w: QWidget, name: str) -> None:
     w.style().polish(w)
 
 
+HINWEIS_MS = 4000  # so lange bleibt ein kurzer Hinweis stehen, dann verschwindet er von selbst
+
+
 class _Meldung(QLabel):
-    """Grüne oder rote Rückmeldung unter einem Knopf."""
+    """Grüne oder rote Rückmeldung unter einem Knopf – oder ein kurzer Hinweis, der von selbst geht."""
+
+    def __init__(self, text: str = ""):
+        super().__init__(text)
+        self._vorher = None  # was vor dem kurzen Hinweis da stand (kommt danach zurück)
+        self._uhr = QTimer(self)
+        self._uhr.setSingleShot(True)
+        self._uhr.timeout.connect(self._kurz_vorbei)
 
     def zeigen(self, text: str, erfolg: bool | None = None) -> None:
-        _neu_zeichnen(self, "gut" if erfolg else ("fehler" if erfolg is False else "meldung"))
+        self._uhr.stop()  # eine echte Rückmeldung ersetzt den kurzen Hinweis
+        self._vorher = None
+        self._setzen(text, "gut" if erfolg else ("fehler" if erfolg is False else "meldung"))
+
+    def kurz_zeigen(self, text: str, ms: int = HINWEIS_MS) -> None:
+        """Hinweis zeigen, nach `ms` verschwindet er, und was vorher dastand, steht wieder da."""
+        if self._vorher is None:
+            self._vorher = (self.text(), self.objectName())
+        self._setzen(text, "meldung")
+        self._uhr.start(ms)
+
+    def _kurz_vorbei(self) -> None:
+        text, name = self._vorher or ("", "meldung")
+        self._vorher = None
+        self._setzen(text, name)
+
+    def _setzen(self, text: str, name: str) -> None:
+        _neu_zeichnen(self, name)
         self.setText(text)
         self.setVisible(bool(text))
 
@@ -416,7 +443,7 @@ class Bibliothek(QWidget):
 #  Rechte Spalte: AUSGEWÄHLT
 # ---------------------------------------------------------------------------
 class OverlayBedienfeld(QWidget):
-    HINWEIS_MS = 4000  # so lange bleibt der Hinweis „gesperrt“ stehen, dann verschwindet er von selbst
+    HINWEIS_MS = HINWEIS_MS  # so lange bleibt der Hinweis „gesperrt“ stehen, dann verschwindet er von selbst
 
     def __init__(self, E, uno: UnoVerwaltung, parent=None):
         super().__init__(parent)
@@ -563,6 +590,19 @@ class OverlayBedienfeld(QWidget):
         unten.addWidget(self.ausblenden)
         lay.addLayout(unten)
 
+        # Ausgegraute Knöpfe sagen, warum (Drüberfahren: Hinweis, Anklicken: kurze Meldung)
+        zeit_melden = lambda text: self._hinweis_zeit(text, None, von_selbst_weg=True)
+        gesperrt_hinweis(self.einblenden, lambda: self._grund_schalten(True), self.meldung_schalter.kurz_zeigen)
+        gesperrt_hinweis(self.ausblenden, lambda: self._grund_schalten(False), self.meldung_schalter.kurz_zeigen)
+        gesperrt_hinweis(self.start, self._grund_start, zeit_melden)
+        gesperrt_hinweis(self.pause, self._grund_pause, zeit_melden)
+        gesperrt_hinweis(self.zurueck, self._grund_allgemein, zeit_melden)
+        for k in self.dauer_knoepfe.values():
+            gesperrt_hinweis(k, self._grund_dauer, zeit_melden)
+        gesperrt_hinweis(self.knopf_uebernehmen, self._grund_texte_uebernehmen, self.meldung_texte.kurz_zeigen)
+        gesperrt_hinweis(self.knopf_texte_neu, self._grund_texte_neu, self.meldung_texte.kurz_zeigen)
+        self._texte_senden = False
+
         self._uhr = QTimer(self)
         self._uhr.setInterval(250)
         self._uhr.timeout.connect(self._countdown_zeigen)
@@ -647,6 +687,65 @@ class OverlayBedienfeld(QWidget):
             self.zeit.setCursor(Qt.CursorShape.ForbiddenCursor if gesperrt else Qt.CursorShape.IBeamCursor)
             self.zeit.setToolTip(hilfe)
             self.zeit.setAccessibleDescription(hilfe)
+
+    # --- Warum ist ein Knopf ausgegraut? ------------------------------------------
+    def _grund_allgemein(self) -> str:
+        o, t = self.overlay, self.E.texte
+        if o is None or not o.bereit:
+            return t.gesperrt_uno_laedt
+        return t.gesperrt_moment
+
+    def _grund_schalten(self, ein: bool) -> str:
+        o, t = self.overlay, self.E.texte
+        if o is None or not o.bereit:
+            return t.gesperrt_uno_laedt
+        if EIN_AUS in o.nicht_unterstuetzt:
+            return t.gesperrt_kein_ein_aus
+        if o.beschaeftigt:
+            return t.gesperrt_schaltet
+        if ein and o.sichtbar is True:
+            return t.gesperrt_schon_ein
+        if not ein and o.sichtbar is False:
+            return t.gesperrt_schon_aus
+        return t.gesperrt_moment
+
+    def _grund_start(self) -> str:
+        o, t = self.overlay, self.E.texte
+        if o is None or not o.bereit:
+            return t.gesperrt_uno_laedt
+        if o.restzeit_ms() == 0:  # zuerst: Uno meldet einen abgelaufenen Countdown weiter als „läuft“
+            return t.gesperrt_start_abgelaufen
+        if o.timer and o.timer.get("isRunning"):
+            return t.gesperrt_start_laeuft
+        return t.gesperrt_moment
+
+    def _grund_pause(self) -> str:
+        o, t = self.overlay, self.E.texte
+        if o is None or not o.bereit:
+            return t.gesperrt_uno_laedt
+        return t.gesperrt_pause
+
+    def _grund_dauer(self) -> str:
+        o, t = self.overlay, self.E.texte
+        if o is None or not o.bereit:
+            return t.gesperrt_uno_laedt
+        return t.gesperrt_keine_dauer
+
+    def _grund_texte_uebernehmen(self) -> str:
+        o, t = self.overlay, self.E.texte
+        if o is None or not o.bereit:
+            return t.gesperrt_uno_laedt
+        if self._texte_senden:
+            return t.gesperrt_texte_senden
+        if not self._felder_da:
+            return t.gesperrt_texte_laden
+        return t.gesperrt_keine_texte
+
+    def _grund_texte_neu(self) -> str:
+        o, t = self.overlay, self.E.texte
+        if o is None or not o.bereit:
+            return t.gesperrt_uno_laedt
+        return t.gesperrt_texte_laden
 
     # --- Countdown-Zeit eintippen ---------------------------------------------
     def _zeit_gesperrt(self, o: Overlay | None) -> str:
@@ -819,6 +918,7 @@ class OverlayBedienfeld(QWidget):
             self.meldung_texte.zeigen(t.meldung_texte_nichts)
             return
         self.knopf_uebernehmen.setEnabled(False)
+        self._texte_senden = True
         self.meldung_texte.zeigen("…")
         offen = {"anzahl": len(geaendert), "fehler": ""}
 
@@ -830,6 +930,8 @@ class OverlayBedienfeld(QWidget):
                 offen["fehler"] = fehler
             else:
                 offen["still"] = True  # steht schon unter der Bibliothek bzw. wird ausgegraut
+            if offen["anzahl"] == 0:
+                self._texte_senden = False
             if offen["anzahl"] == 0 and overlay is self.overlay:
                 self.knopf_uebernehmen.setEnabled(True)
                 if offen["fehler"]:
@@ -864,8 +966,9 @@ class UnoEinrichtung(QWidget):
         lay.addWidget(erklaerung)
         self.einfuegen = knopf(t.knopf_uno_einfuegen, "einblenden")
         self.einfuegen.clicked.connect(self._einfuegen)
-        lay.addWidget(self.einfuegen)
         self.meldung = meldung()
+        gesperrt_hinweis(self.einfuegen, lambda: t.gesperrt_einfuegen, self.meldung.kurz_zeigen)
+        lay.addWidget(self.einfuegen)
         lay.addWidget(self.meldung)
 
         innen = QWidget()
