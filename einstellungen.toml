@@ -7,7 +7,8 @@
 #  Farben sind Hex-Codes, z. B. "#FF0000" = Rot.
 #  Texte immer in "Anführungszeichen".
 #  Zugangsdaten (Uno, Twitch) stehen NICHT hier, sondern sicher im
-#  Passwortspeicher des Systems.
+#  Passwortspeicher des Systems. Ein eigenes OBS-Passwort gehört in
+#  daten/geheim.toml (wird nie hochgeladen).
 # =====================================================================
 
 
@@ -19,8 +20,9 @@
 adresse = "localhost"
 # 0 = Port automatisch aus den OBS-Einstellungen lesen.
 port = 0
-# Leer lassen = Passwort automatisch aus den OBS-Einstellungen lesen.
-passwort = ""
+# Das OBS-Passwort steht NICHT hier (diese Datei kommt auf GitHub).
+# Normalerweise liest OpenRegie es automatisch aus den OBS-Einstellungen.
+# Nur falls nötig: in daten/geheim.toml bei [obs] passwort eintragen.
 # Wie oft OpenRegie es neu versucht, wenn OBS nicht erreichbar ist (Sekunden).
 neu_verbinden_sekunden = 3
 # Befehl, mit dem OpenRegie OBS startet.
@@ -328,7 +330,7 @@ knopf_beenden_nein = "Weiter streamen"
 # Meldungen (verständlich, ohne Fachsprache)
 meldung_obs_nicht_offen = "OBS läuft nicht. Klicke auf „OBS starten“."
 meldung_websocket_aus = "OBS ist offen, aber die Fernsteuerung ist aus. In OBS: Werkzeuge → WebSocket-Servereinstellungen → „WebSocket-Server aktivieren“ einschalten."
-meldung_passwort_falsch = "OBS hat das Passwort abgelehnt. Bitte in einstellungen.toml bei [obs] das Passwort leer lassen oder das richtige eintragen."
+meldung_passwort_falsch = "OBS hat das Passwort abgelehnt. Bitte in daten/geheim.toml bei [obs] das Passwort leer lassen oder das richtige eintragen."
 meldung_obs_zu_alt = "Diese OBS-Version ist zu alt für OpenRegie. Bitte OBS aktualisieren."
 meldung_verbindung_weg = "Die Verbindung zu OBS ist abgebrochen. OpenRegie versucht es gleich wieder."
 meldung_obs_startet = "OBS wird im Hintergrund gestartet …"

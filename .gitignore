@@ -1,5 +1,38 @@
-__pycache__/
-*.pyc
-.venv/
-# Persönliche, lokale Daten (z. B. später Zugangsdaten für Overlays.uno)
+# --- Geheimnisse (NIE hochladen) ---
 daten/geheim*
+!daten/geheim.beispiel.toml
+*.secret
+*.key
+.env
+.env.*
+
+# --- Claude Code (lokale Einstellungen) ---
+.claude/settings.local.json
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Cache ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# --- Build-Ordner ---
+build/
+dist/
+*.egg-info/
+
+# --- Virtuelle Umgebungen ---
+.venv/
+venv/
+
+# --- Editor / System ---
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store

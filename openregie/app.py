@@ -31,8 +31,18 @@ def protokoll_einrichten() -> Path:
     """Schreibt ein Protokoll (für die Fehlersuche) nach ~/.local/state/openregie/."""
     ordner = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "openregie"
     ordner.mkdir(parents=True, exist_ok=True)
+    # Nur der eigene Benutzer darf das Protokoll lesen (auch bei mehreren Benutzern am PC).
+    try:
+        ordner.chmod(0o700)
+    except OSError:
+        pass
     datei = ordner / "openregie.log"
     handler = logging.handlers.RotatingFileHandler(datei, maxBytes=1_000_000, backupCount=2, encoding="utf-8")
+    for alte in ordner.glob("openregie.log*"):
+        try:
+            alte.chmod(0o600)
+        except OSError:
+            pass
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     wurzel = logging.getLogger()
     wurzel.setLevel(logging.INFO)

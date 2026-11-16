@@ -74,6 +74,8 @@ def obs_einstellungen(**werte):
     w.update(werte)
     return einstellungen.Bereich("obs", w)
 
+# Die eigene daten/geheim.toml nicht benutzen – das Test-OBS hat ein eigenes Passwort.
+zugang.GEHEIMDATEI = Path(tempfile.gettempdir()) / "openregie-test-gibt-es-nicht.toml"
 z = zugang.ermitteln(E.obs)
 pruef("Port/Passwort automatisch gelesen", z.port == 4466 and z.passwort == "testpasswort123", f"port={z.port}")
 

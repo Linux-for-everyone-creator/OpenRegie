@@ -366,9 +366,28 @@ class ZugangTest(unittest.TestCase):
         self.assertFalse(zmod.obs_laeuft(pathlib.Path("/gibt/es/nicht")))
 
     def test_vorrang_einstellungen(self):
+        import pathlib, tempfile
         from openregie.einstellungen import Bereich
-        z = zmod.ermitteln(Bereich("obs", {"port": 5000, "passwort": "eigen"}))
+        with tempfile.TemporaryDirectory() as o:
+            geheim = pathlib.Path(o) / "geheim.toml"
+            geheim.write_text('[obs]\npasswort = "eigen"\n', encoding="utf-8")
+            z = zmod.ermitteln(Bereich("obs", {"port": 5000}), geheimdatei=geheim)
         self.assertEqual((z.port, z.passwort), (5000, "eigen"))
+
+    def test_geheimdatei_fehlt_oder_kaputt(self):
+        import pathlib, tempfile
+        with tempfile.TemporaryDirectory() as o:
+            ordner = pathlib.Path(o)
+            self.assertEqual(zmod.passwort_aus_geheimdatei(ordner / "gibtsnicht.toml"), "")
+            (ordner / "ohne.toml").write_text('[uno]\nadresse = "x"\n', encoding="utf-8")
+            self.assertEqual(zmod.passwort_aus_geheimdatei(ordner / "ohne.toml"), "")
+            (ordner / "kaputt.toml").write_text('[obs\npasswort = ', encoding="utf-8")
+            with self.assertLogs("openregie.zugang", "WARNING"):
+                self.assertEqual(zmod.passwort_aus_geheimdatei(ordner / "kaputt.toml"), "")
+
+    def test_einstellungen_ohne_passwortfeld(self):
+        from openregie import einstellungen
+        self.assertNotIn("passwort", einstellungen.lade().obs.als_dict())
 
     def test_echte_obs_datei_lesbar(self):
         z = zmod.aus_obs_lesen()

@@ -7,11 +7,19 @@ damit niemand das Passwort abtippen muss.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..einstellungen import PROJEKT_ORDNER
+
+log = logging.getLogger("openregie.zugang")
+
 STANDARD_PORT = 4455
+# Geheime Werte (z. B. ein eigenes OBS-Passwort) stehen hier – diese Datei kommt nie in Git.
+GEHEIMDATEI = PROJEKT_ORDNER / "daten" / "geheim.toml"
 
 
 def _config_ordner() -> Path:
@@ -53,13 +61,31 @@ def aus_obs_lesen(pfade: list[Path] | None = None) -> Zugang:
     return Zugang()
 
 
-def ermitteln(obs_einstellungen) -> Zugang:
-    """Werte aus einstellungen.toml haben Vorrang, sonst die aus OBS."""
+def passwort_aus_geheimdatei(pfad: Path | None = None) -> str:
+    """Liest [obs] passwort aus daten/geheim.toml. Fehlt die Datei oder der Eintrag: ""."""
+    pfad = Path(pfad) if pfad is not None else GEHEIMDATEI
+    try:
+        with open(pfad, "rb") as datei:
+            daten = tomllib.load(datei)
+    except FileNotFoundError:
+        return ""
+    except (OSError, tomllib.TOMLDecodeError):
+        # Den Inhalt nie ins Protokoll schreiben – nur, dass die Datei nicht lesbar ist.
+        log.warning("%s ist nicht lesbar oder hat einen Schreibfehler – OBS-Passwort wird ignoriert", pfad.name)
+        return ""
+    obs = daten.get("obs")
+    return str(obs.get("passwort") or "") if isinstance(obs, dict) else ""
+
+
+def ermitteln(obs_einstellungen, geheimdatei: Path | None = None) -> Zugang:
+    """Port aus einstellungen.toml und Passwort aus daten/geheim.toml haben Vorrang,
+    sonst gelten die Werte aus den OBS-Einstellungen."""
     zugang = aus_obs_lesen()
     if int(obs_einstellungen.port) > 0:
         zugang.port = int(obs_einstellungen.port)
-    if str(obs_einstellungen.passwort):
-        zugang.passwort = str(obs_einstellungen.passwort)
+    passwort = passwort_aus_geheimdatei(geheimdatei)
+    if passwort:
+        zugang.passwort = passwort
     return zugang
 
 

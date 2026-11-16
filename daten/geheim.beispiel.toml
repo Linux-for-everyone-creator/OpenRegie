@@ -1,0 +1,21 @@
+# Beispiel für daten/geheim.toml – OHNE echte Werte.
+#
+# Kopieren:   cp daten/geheim.beispiel.toml daten/geheim.toml
+# daten/geheim.toml kommt NIE in Git (steht in .gitignore).
+#
+# Hinweis: Uno- und Twitch-Zugänge speichert OpenRegie im Passwortspeicher des Systems.
+# Hier stehen nur: [uno] für die Entwickler-Werkzeuge (Test mit echtem Uno) und
+# [obs] für ein eigenes OBS-Passwort (meist nicht nötig).
+#
+# So geht's:
+#  1. In Overlays.uno im Menü „API Description“ die Adresse kopieren.
+#  2. Unten zwischen die beiden Anführungszeichen einfügen.
+#  3. Speichern.
+
+[uno]
+adresse = "https://app.overlays.uno/apiv2/controlapps/DEIN_TOKEN_HIER/api"
+
+[obs]
+# Normalerweise LEER lassen: OpenRegie liest das Passwort selbst aus den OBS-Einstellungen.
+# Nur eintragen, wenn das nicht klappt (OBS → Werkzeuge → WebSocket-Servereinstellungen).
+passwort = ""
