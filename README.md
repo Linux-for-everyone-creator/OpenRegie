@@ -61,11 +61,15 @@ Nur falls das nicht klappt: `cp daten/geheim.beispiel.toml daten/geheim.toml` un
 Die Adresse enthält einen geheimen Schlüssel. OpenRegie speichert sie deshalb verschlüsselt im
 Passwortspeicher des Systems (KDE-Wallet bzw. GNOME-Schlüsselbund), nie in einer Datei des Projekts.
 
-### Twitch einrichten (einmalig)
+### Twitch einrichten
+Nichts zu tun: Die **Client-ID** der OpenRegie-App bei Twitch ist in `einstellungen.toml` schon eingetragen.
+Einfach auf **„Mit Twitch anmelden“** klicken und den angezeigten Code auf der Twitch-Seite bestätigen.
+
+**Optional – eigene Twitch-Anwendung** (z. B. für einen eigenen Fork):
 1. Auf https://dev.twitch.tv/console eine Anwendung registrieren (Weiterleitungs-URL `http://localhost`,
    Client-Typ **Öffentlich**).
-2. Die **Client-ID** in `einstellungen.toml` bei `[twitch] client_id` eintragen. Sie ist kein Geheimnis.
-3. OpenRegie neu starten und auf **„Mit Twitch anmelden“** klicken.
+2. Ihre **Client-ID** in `einstellungen.toml` bei `[twitch] client_id` eintragen. Sie ist kein Geheimnis.
+3. OpenRegie neu starten.
 
 ### Für Entwickler
 - Tests: `python3 -m unittest discover -s tests -t .`
@@ -137,11 +141,15 @@ Only if that fails: `cp daten/geheim.beispiel.toml daten/geheim.toml` and put th
 The URL contains a secret token, so OpenRegie stores it encrypted in the system keyring
 (KDE Wallet / GNOME Keyring), never in a project file.
 
-### Twitch setup (one-time)
+### Twitch setup
+Nothing to do: the **Client ID** of the OpenRegie app on Twitch is already set in `einstellungen.toml`.
+Just click **"Mit Twitch anmelden"** (log in with Twitch) and confirm the code shown on the Twitch page.
+
+**Optional – your own Twitch application** (e.g. for your own fork):
 1. Register an application at https://dev.twitch.tv/console (redirect URL `http://localhost`,
    client type **Public**).
-2. Put the **Client ID** into `einstellungen.toml` under `[twitch] client_id`. It is not a secret.
-3. Restart OpenRegie and click **"Mit Twitch anmelden"** (log in with Twitch).
+2. Put its **Client ID** into `einstellungen.toml` under `[twitch] client_id`. It is not a secret.
+3. Restart OpenRegie.
 
 ### For developers
 - Tests: `python3 -m unittest discover -s tests -t .`
