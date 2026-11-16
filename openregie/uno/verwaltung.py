@@ -215,6 +215,9 @@ class Overlay:
     timer: dict | None = None  # Zeitgeber-Zustand von Uno (nur mit Countdown)
     dauer: int | None = None  # Countdown-Dauer in Sekunden
     stand_ms: float = 0.0  # wann Timer/Dauer zuletzt von Uno kamen (für die Anzeige)
+    # Zählt eigene Countdown-Änderungen. Eine Antwort von Uno, die VOR der letzten Änderung angefragt
+    # wurde, darf Dauer und Zeitgeber nicht mit dem alten Stand überschreiben (sonst springt die Zeit kurz zurück).
+    countdown_stand: int = 0
     bild_daten: bytes | None = None  # geladenes Vorschaubild (b"" = keins)
     # Funktionen, die dieses Uno nicht kann (Uno sagt „Invalid command“): werden still ausgegraut
     nicht_unterstuetzt: set = field(default_factory=set)
@@ -476,8 +479,12 @@ class UnoVerwaltung(QObject):
         if anders:
             self.liste_geaendert.emit()
 
-    def _zustand_uebernehmen(self, overlay: Overlay, control) -> None:
-        """GET …/control → Tally, Countdown und Texte des Overlays."""
+    def _zustand_uebernehmen(self, overlay: Overlay, control, countdown_stand: int | None = None) -> None:
+        """GET …/control → Tally, Countdown und Texte des Overlays.
+
+        countdown_stand: overlay.countdown_stand beim Absenden der Anfrage. Gab es seitdem eine eigene
+        Countdown-Änderung, bleiben Dauer und Zeitgeber, wie sie sind (die Antwort ist schon veraltet).
+        """
         plan = overlay.bauplan
         if plan is None:
             return
@@ -487,9 +494,10 @@ class UnoVerwaltung(QObject):
         # Während ein eigener Befehl unterwegs ist, nicht vom alten Stand überschreiben lassen
         if sichtbar is not None and not overlay.beschaeftigt:
             overlay.sichtbar = sichtbar
-        timer = einzel.wert(teile, plan.timer)
-        overlay.timer = dict(timer) if isinstance(timer, dict) else None
-        overlay.dauer = einzel.dauer_sekunden(einzel.wert(teile, plan.dauer))
+        if countdown_stand is None or countdown_stand == overlay.countdown_stand:
+            timer = einzel.wert(teile, plan.timer)
+            overlay.timer = dict(timer) if isinstance(timer, dict) else None
+            overlay.dauer = einzel.dauer_sekunden(einzel.wert(teile, plan.dauer))
         overlay.felder = einzel.textfelder_lesen(teile, plan)
         overlay.stand_ms = time.time() * 1000
         if (overlay.sichtbar, overlay.timer, overlay.dauer) != vorher:
@@ -518,7 +526,8 @@ class UnoVerwaltung(QObject):
                                           overlay)
                 else:
                     self._singular(projekt, "GET", "/control", None,
-                                   lambda ok, d, f, a, p=projekt, o=overlay: self._einzel_stand(p, o, ok, d, f, a, still))
+                                   lambda ok, d, f, a, p=projekt, o=overlay, n=overlay.countdown_stand:
+                                   self._einzel_stand(p, o, ok, d, f, a, still, n))
                 continue
 
             def antwort(ok, payload, fehler, art, p=projekt):
@@ -548,10 +557,10 @@ class UnoVerwaltung(QObject):
                 self._speichern()
         self._erreichbar(projekt, overlay is not None, fehler, art)
 
-    def _einzel_stand(self, projekt, overlay, ok, daten, fehler, art, still) -> None:
+    def _einzel_stand(self, projekt, overlay, ok, daten, fehler, art, still, countdown_stand=None) -> None:
         self._laedt -= 1
         if ok:
-            self._zustand_uebernehmen(overlay, daten)
+            self._zustand_uebernehmen(overlay, daten, countdown_stand)
         self._erreichbar(projekt, ok, fehler, art)
 
     def _erreichbar(self, projekt: UnoProjekt, ok: bool, fehler: str, art: str = "") -> None:
@@ -657,16 +666,23 @@ class UnoVerwaltung(QObject):
             befehl = "ShowOverlay" if sichtbar else "HideOverlay"
             self._befehl(overlay.projekt, self._overlay_befehl(overlay, befehl), antwort)
 
-    def felder_laden(self, overlay: Overlay, fertig=None) -> None:
-        """Texte (und bei Einzel-Unos auch Tally und Countdown) frisch von Uno holen."""
+    def felder_laden(self, overlay: Overlay, fertig=None, countdown_stand: int | None = None) -> None:
+        """Texte (und bei Einzel-Unos auch Tally und Countdown) frisch von Uno holen.
+
+        countdown_stand: nach einer eigenen Änderung deren Stand vom START der Änderung – kam seitdem
+        eine neuere Countdown-Änderung, ist diese Antwort für Dauer und Zeitgeber schon veraltet.
+        """
         if overlay.projekt.einzeln:
             if overlay.bauplan is None:
                 self._noch_nicht_bereit(fertig)
                 return
 
+            if countdown_stand is None:
+                countdown_stand = overlay.countdown_stand
+
             def stand(ok, daten, fehler, art):
                 if ok:
-                    self._zustand_uebernehmen(overlay, daten)
+                    self._zustand_uebernehmen(overlay, daten, countdown_stand)
                     self._erreichbar(overlay.projekt, True, "")
                 else:
                     fehler = self._aktion_fehlgeschlagen(overlay, TEXTE, fehler, art)
@@ -724,19 +740,63 @@ class UnoVerwaltung(QObject):
         sekunden = max(0, min(int(sekunden), int(self._E.countdown_hoechstdauer_sekunden)))
         teil, feld = plan.dauer
         overlay.dauer = sekunden  # sofort anzeigen, Uno bestätigt gleich
+        overlay.countdown_stand += 1  # ältere Antworten von Uno sollen das nicht zurückdrehen
         self.overlay_geaendert.emit(overlay)
         self._aendern_und_lesen(overlay, [{"subCompositionId": teil, "payload": {feld: sekunden}}], fertig,
                                 COUNTDOWN)
 
+    def countdown_zeit_setzen(self, overlay: Overlay, sekunden: int, fertig=None) -> None:
+        """Eingetippte Zeit: Dauer setzen – und hat der Countdown schon gezählt, ihn im selben
+        Befehl auf die neue Zeit zurücksetzen. So zeigen OpenRegie und Uno danach genau diese Zeit."""
+        plan = overlay.bauplan
+        if plan is None or plan.dauer is None:
+            self._noch_nicht_bereit(fertig)
+            return
+        sekunden = max(0, min(int(sekunden), int(self._E.countdown_hoechstdauer_sekunden)))
+        teil, feld = plan.dauer
+        befehl = [{"subCompositionId": teil, "payload": {feld: sekunden}}]
+        zuruecksetzen = plan.timer is not None and einzel.hat_gezaehlt(overlay.timer)
+        if zuruecksetzen:
+            t_teil, t_feld = plan.timer
+            reset = {t_feld: {"command": "reset"}}
+            if t_teil == teil:
+                befehl[0]["payload"].update(reset)
+            else:
+                befehl.append({"subCompositionId": t_teil, "payload": reset})
+
+        vorher = (overlay.dauer, overlay.timer)
+        overlay.dauer = sekunden  # sofort anzeigen, Uno bestätigt gleich
+        overlay.countdown_stand += 1  # ältere Antworten von Uno sollen das nicht zurückdrehen
+        mein_stand = overlay.countdown_stand
+        if zuruecksetzen:
+            overlay.timer = dict(overlay.timer, value=0, isRunning=False)
+        self.overlay_geaendert.emit(overlay)
+
+        def geaendert(ok, _daten, fehler, art):
+            if not ok:
+                # Uno hat die neue Zeit nicht angenommen: wieder den alten Stand zeigen
+                fehler = self._aktion_fehlgeschlagen(overlay, COUNTDOWN, fehler, art)
+                if overlay.countdown_stand == mein_stand:  # nur, wenn seitdem nichts anderes geändert wurde
+                    overlay.dauer, overlay.timer = vorher
+                    self.overlay_geaendert.emit(overlay)
+                if fertig:
+                    fertig(False, fehler)
+                return
+            self.felder_laden(overlay, fertig, mein_stand)  # angenommen: echten Stand von Uno lesen
+
+        self._singular(overlay.projekt, "PATCH", "/control", befehl, geaendert)
+
     def _aendern_und_lesen(self, overlay: Overlay, befehl: list, fertig, funktion: str) -> None:
         """PATCH schicken, danach den neuen Stand lesen (Uno setzt z. B. die Startzeit selbst)."""
+        stand_beim_start = overlay.countdown_stand
+
         def geaendert(ok, _daten, fehler, art):
             if not ok:
                 fehler = self._aktion_fehlgeschlagen(overlay, funktion, fehler, art)
                 if fertig:
                     fertig(False, fehler)
                 return
-            self.felder_laden(overlay, fertig)
+            self.felder_laden(overlay, fertig, stand_beim_start)
 
         self._singular(overlay.projekt, "PATCH", "/control", befehl, geaendert)
 

@@ -27,6 +27,7 @@ Mit dem echten Uno geprüft (14.11.2026):
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 AKTIV_FELD = "Active"
@@ -179,6 +180,54 @@ def restzeit_ms(timer, dauer_s: int | None, jetzt_ms: float) -> int | None:
     except (TypeError, ValueError):
         return None
     return int(max(0.0, dauer_s * 1000 - abgelaufen))
+
+
+def hat_gezaehlt(timer) -> bool:
+    """Ist der Zeitgeber schon gelaufen (läuft gerade, angehalten oder abgelaufen)?"""
+    if not isinstance(timer, dict):
+        return False
+    if timer.get("isRunning"):
+        return True
+    try:
+        return float(timer.get("value") or 0) > 0
+    except (TypeError, ValueError):
+        return True  # unklar: lieber zurücksetzen, damit die neue Zeit sicher stimmt
+
+
+# Warum eine eingetippte Zeit nicht passt (die Oberfläche macht daraus einen Satz für Menschen)
+ZEIT_LEER, ZEIT_FORMAT, ZEIT_UEBER_59, ZEIT_NULL, ZEIT_ZU_LANG = "leer", "format", "ueber_59", "null", "zu_lang"
+_ZEIT_MUSTER = re.compile(r"^[0-9]{1,4}(?::[0-9]{2}){0,2}$")
+
+
+def zeit_lesen(text: str, hoechstens_s: int) -> tuple[int | None, str]:
+    """Eingetippte Countdown-Zeit → (Sekunden, "") oder (None, Fehlerart).
+
+    Erlaubt:  „5“ (Minuten) · „5:00“ / „12:30“ / „90:00“ (Minuten:Sekunden) · „1:05:00“ (Stunden).
+    Statt „:“ gehen auch „.“ und „,“ (z. B. „5.30“). Leerzeichen werden ignoriert.
+    """
+    roh = "".join(str(text or "").split()).replace(".", ":").replace(",", ":")
+    if not roh:
+        return None, ZEIT_LEER
+    if not _ZEIT_MUSTER.match(roh):
+        return None, ZEIT_FORMAT
+    teile = [int(t) for t in roh.split(":")]
+    if len(teile) == 1:
+        sekunden = teile[0] * 60
+    elif len(teile) == 2:
+        m, s = teile
+        if s > 59:
+            return None, ZEIT_UEBER_59
+        sekunden = m * 60 + s
+    else:
+        h, m, s = teile
+        if m > 59 or s > 59:
+            return None, ZEIT_UEBER_59
+        sekunden = h * 3600 + m * 60 + s
+    if sekunden <= 0:
+        return None, ZEIT_NULL
+    if sekunden > hoechstens_s:
+        return None, ZEIT_ZU_LANG
+    return sekunden, ""
 
 
 def zeit_text(ms: int | None) -> str:

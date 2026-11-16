@@ -280,6 +280,356 @@ class EinzelUnoFensterTest(Grundlage):
             warte(200)
         self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 0, 3000))  # nie negativ
 
+    # --- Countdown-Zeit direkt eintippen --------------------------------------
+    def tippen(self, text, taste=Qt.Key.Key_Return):
+        """Klick auf die große Zeit, Text eintippen, Enter (bzw. andere Taste)."""
+        QTest.mouseClick(self.b.zeit, Qt.MouseButton.LeftButton)
+        self.assertTrue(self.b.zeit_eingabe.isVisible())
+        self.assertFalse(self.b.zeit.isVisible())
+        self.assertEqual(self.b.zeit_eingabe.selectedText(), self.b.zeit.text())  # alles markiert
+        QTest.keyClicks(self.b.zeit_eingabe, text)
+        if taste is not None:
+            QTest.keyClick(self.b.zeit_eingabe, taste)
+
+    def uno_patches(self):
+        return [b["PATCH"] for b in self.netz.einzel_befehle if "PATCH" in b]
+
+    def test_zeit_eintippen_kommt_bei_uno_an(self):
+        self.tippen("12:30")
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+        self.assertTrue(self.b.zeit.isVisible())
+        self.assertEqual(self.b.zeit.text(), "12:30")  # sofort sichtbar
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 750, 3000))
+        self.assertEqual(self.uno_patches()[-1], [{"subCompositionId": CONTENT, "payload": {"BeginTime": 750}}])
+        self.assertTrue(warte_bis(lambda: self.kachel("Countdown | Circles").zeit_text() == "12:30", 3000))
+        self.assertEqual(self.e.restzeit_s(), 750)  # das Uno-Overlay zeigt genau diese Zeit
+        self.assertFalse(self.b.meldung_zeit.isVisible())
+        # Stunden und nur Minuten gehen auch
+        self.tippen("1:05:00")
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 3900, 3000))
+        self.assertEqual(self.b.zeit.text(), "1:05:00")
+        self.tippen("5")
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 300, 3000))
+        self.assertEqual(self.b.zeit.text(), "05:00")
+
+    def test_zeit_und_minuten_knoepfe_zeigen_dasselbe(self):
+        self.tippen("12:30")
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 750, 3000))
+        klick(self.b.dauer_knoepfe[60])  # +1 Min rechnet mit der eingetippten Zeit weiter
+        self.assertEqual(self.b.zeit.text(), "13:30")
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 810, 3000))
+        self.assertEqual(self.b.overlay.dauer, 810)
+        self.tippen("2:00")  # und umgekehrt: Eintippen nach den Knöpfen
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 120, 3000))
+        klick(self.b.dauer_knoepfe[-60])
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 60, 3000))
+        self.assertTrue(warte_bis(lambda: self.b.zeit.text() == "01:00", 3000))
+
+    def test_escape_bricht_ab(self):
+        self.tippen("9:99", taste=Qt.Key.Key_Escape)
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+        self.assertEqual(self.b.zeit.text(), "05:00")
+        warte(300)
+        self.assertEqual(self.uno_patches(), [])  # nichts an Uno geschickt
+        self.assertEqual(self.e.werte[CONTENT]["BeginTime"], 300)
+
+    def test_falsche_eingaben_mit_hinweis(self):
+        t = self.E.texte
+        for text, hinweis in [("abc", t.meldung_countdown_format), ("5:75", t.meldung_countdown_ueber_59),
+                              ("0:00", t.meldung_countdown_null), ("10:00:00",
+                               t.meldung_countdown_zu_lang.format(hoechstens="9:59:59")),
+                              ("5:3", t.meldung_countdown_format), ("", t.meldung_countdown_leer)]:
+            if not self.b.zeit_eingabe.isVisible():
+                QTest.mouseClick(self.b.zeit, Qt.MouseButton.LeftButton)
+            self.b.zeit_eingabe.selectAll()
+            QTest.keyClick(self.b.zeit_eingabe, Qt.Key.Key_Backspace)
+            QTest.keyClicks(self.b.zeit_eingabe, text)
+            QTest.keyClick(self.b.zeit_eingabe, Qt.Key.Key_Return)
+            self.assertTrue(self.b.zeit_eingabe.isVisible(), text)  # bleibt offen zum Verbessern
+            self.assertTrue(self.b.meldung_zeit.isVisible(), text)
+            self.assertEqual(self.b.meldung_zeit.text(), hinweis, text)
+            self.assertEqual(self.b.meldung_zeit.objectName(), "fehler")
+        # Verbessern: richtig eintippen, Hinweis verschwindet
+        self.b.zeit_eingabe.selectAll()
+        QTest.keyClicks(self.b.zeit_eingabe, "7:00")
+        QTest.keyClick(self.b.zeit_eingabe, Qt.Key.Key_Return)
+        self.assertFalse(self.b.meldung_zeit.isVisible())
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 420, 3000))
+        # nur die richtige Zeit kam bei Uno an
+        self.assertEqual(self.uno_patches(), [[{"subCompositionId": CONTENT, "payload": {"BeginTime": 420}}]])
+
+    def test_gesperrt_wenn_live(self):
+        t = self.E.texte
+        klick(self.b.einblenden)
+        self.assertTrue(warte_bis(lambda: self.b.overlay.sichtbar is True, 3000))
+        QTest.mouseClick(self.b.zeit, Qt.MouseButton.LeftButton)
+        self.assertFalse(self.b.zeit_eingabe.isVisible())  # kein Eingabefeld
+        self.assertTrue(self.b.meldung_zeit.isVisible())
+        self.assertEqual(self.b.meldung_zeit.text(), t.meldung_countdown_live)
+        QTest.mouseClick(self.b.zeit, Qt.MouseButton.LeftButton)  # auch Doppelklick nicht
+        QTest.mouseDClick(self.b.zeit, Qt.MouseButton.LeftButton)
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+        self.assertEqual(self.b.zeit.toolTip(), t.meldung_countdown_live)
+        warte(50)
+        # der (zweizeilige) Hinweis liegt UNTER der Zeit, nichts wird überdeckt oder gequetscht
+        self.assertGreater(self.b.meldung_zeit.geometry().top(), self.b.zeit.geometry().bottom())
+        self.assertGreaterEqual(self.b.meldung_zeit.height(),
+                                self.b.meldung_zeit.heightForWidth(self.b.meldung_zeit.width()))
+        self.assertLess(self.b.meldung_zeit.geometry().bottom(), self.b.countdown_zustand.geometry().top())
+        # Hinweis verschwindet von selbst
+        self.assertTrue(warte_bis(lambda: not self.b.meldung_zeit.isVisible(), self.b.HINWEIS_MS + 1500))
+        n = len(self.uno_patches())
+        warte(200)
+        self.assertEqual(len(self.uno_patches()), n)
+        self.assertEqual(self.e.werte[CONTENT]["BeginTime"], 300)
+        # nach dem Ausblenden geht es wieder
+        klick(self.b.ausblenden)
+        self.assertTrue(warte_bis(lambda: self.b.overlay.sichtbar is False, 3000))
+        warte(300)
+        self.assertEqual(self.b.zeit.toolTip(), t.countdown_zeit_tippen)
+        self.tippen("3:00")
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 180, 3000))
+
+    def test_waehrend_des_tippens_live_geschaltet(self):
+        """Jemand blendet ein, während getippt wird: Eingabe zu, nichts übernommen."""
+        self.tippen("8:00", taste=None)
+        self.e.werte[CONTENT]["ShowOverlay"] = True
+        self.e.zustand.update({k: "In" for k in self.e.zustand})
+        self.e.werte["-Haupt1"]["Active"] = True
+        self.uno.felder_laden(self.b.overlay)  # Uno meldet: jetzt im Stream
+        self.assertTrue(warte_bis(lambda: not self.b.zeit_eingabe.isVisible(), 3000))
+        self.assertEqual(self.b.meldung_zeit.text(), self.E.texte.meldung_countdown_live)
+        QTest.keyClick(self.b.zeit_eingabe, Qt.Key.Key_Return)  # Enter kommt zu spät: nichts passiert
+        warte(300)
+        self.assertEqual(self.uno_patches(), [])
+        self.assertEqual(self.e.werte[CONTENT]["BeginTime"], 300)
+
+    def test_angehaltener_countdown_steht_danach_auf_der_neuen_zeit(self):
+        t = self.E.texte
+        klick(self.b.start)
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_laeuft, 3000))
+        warte(1200)
+        klick(self.b.pause)
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_pausiert, 3000))
+        self.assertIn(self.b.zeit.text(), ("04:59", "04:58", "04:57"))  # angehalten, schon gezählt
+        self.tippen("10:00")
+        self.assertEqual(self.b.zeit.text(), "10:00")  # nicht 9:59
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 600, 3000))
+        # ein einziger Befehl: neue Dauer + zurück auf Anfang
+        self.assertEqual(self.uno_patches()[-1], [{"subCompositionId": CONTENT,
+                                                   "payload": {"BeginTime": 600, "Timer": {"command": "reset"}}}])
+        self.assertEqual(self.e.restzeit_s(), 600)  # Uno zeigt genau 10:00
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_bereit, 3000))
+        warte(600)
+        self.assertEqual(self.b.zeit.text(), "10:00")  # läuft nicht von selbst los
+        klick(self.b.start)  # und startet von der neuen Zeit
+        self.assertTrue(warte_bis(lambda: self.b.zeit.text() == "09:59", 3000))
+
+    def test_uno_lehnt_ab_alte_zeit_kommt_zurueck(self):
+        self.netz.uno_kaputt = True
+        self.tippen("12:30")
+        self.assertTrue(warte_bis(lambda: self.b.meldung_zeit.isVisible(), 3000))
+        self.assertEqual(self.b.meldung_zeit.text(), self.E.texte.meldung_uno_fehler)
+        self.assertEqual(self.b.zeit.text(), "05:00")  # nichts vorgegaukelt
+        self.assertEqual(self.b.overlay.dauer, 300)
+        self.netz.uno_kaputt = False
+        self.tippen("12:30")
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 750, 3000))
+        self.assertFalse(self.b.meldung_zeit.isVisible())
+
+    def test_doppelklick_oeffnet_und_ersetzt_die_zeit(self):
+        # echter Doppelklick: Drücken, Loslassen (öffnet), Doppelklick + Loslassen landen im neuen Feld
+        QTest.mousePress(self.b.zeit, Qt.MouseButton.LeftButton)
+        QTest.mouseRelease(self.b.zeit, Qt.MouseButton.LeftButton)
+        self.assertTrue(self.b.zeit_eingabe.isVisible())
+        QTest.mouseDClick(self.b.zeit_eingabe, Qt.MouseButton.LeftButton)
+        QTest.mouseRelease(self.b.zeit_eingabe, Qt.MouseButton.LeftButton)
+        self.assertTrue(self.b.zeit_eingabe.isVisible())
+        self.assertEqual(self.b.zeit_eingabe.selectedText(), "05:00")  # weiterhin alles markiert
+        QTest.keyClicks(self.b.zeit_eingabe, "4:00")
+        self.assertEqual(self.b.zeit_eingabe.text(), "4:00")
+        QTest.keyClick(self.b.zeit_eingabe, Qt.Key.Key_Enter)  # Enter auf dem Ziffernblock
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 240, 3000))
+
+    def test_wegklicken_und_knoepfe_brechen_ab(self):
+        self.tippen("8:00", taste=None)
+        klick(self.b.dauer_knoepfe[60])  # anderer Knopf: Eingabe zu, Knopf gilt
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 360, 3000))
+        self.tippen("8:00", taste=None)
+        self.b.eingabe("Message").setFocus(Qt.FocusReason.MouseFocusReason)  # ins Textfeld geklickt
+        self.assertTrue(warte_bis(lambda: not self.b.zeit_eingabe.isVisible(), 1000))
+        warte(300)
+        self.assertEqual(self.e.werte[CONTENT]["BeginTime"], 360)
+
+    # --- Knöpfe ✓ (Übernehmen) und ✕ (Abbrechen) neben dem Feld – ohne Enter/Esc ---
+    def echter_klick(self, k):
+        """Drücken und Loslassen wie mit der Maus – inklusive Fokuswechsel, den Qt beim Drücken macht."""
+        self.assertTrue(k.isVisible() and k.isEnabled(), k.accessibleName())
+        QTest.mousePress(k, Qt.MouseButton.LeftButton)
+        # Beim Drücken darf das Feld nicht zugehen (kein „Wegklicken“)
+        self.assertTrue(self.b.zeit_eingabe.isVisible(), "Feld beim Drücken zugegangen")
+        self.assertTrue(self.b.zeit_eingabe.hasFocus(), "Knopf hat den Fokus genommen")
+        QTest.mouseRelease(k, Qt.MouseButton.LeftButton)
+
+    def test_knoepfe_nur_beim_tippen_und_gross_genug(self):
+        self.assertFalse(self.b.zeit_ok.isVisible())
+        self.assertFalse(self.b.zeit_weg.isVisible())
+        self.tippen("8:00", taste=None)
+        warte(50)
+        rechts = self.b.width()
+        feld = self.b.zeit_eingabe.geometry()
+        for k in (self.b.zeit_ok, self.b.zeit_weg):
+            self.assertTrue(k.isVisible())
+            self.assertGreaterEqual(k.width(), self.E.groessen.knopf_hoehe)
+            self.assertGreaterEqual(k.height(), self.E.groessen.knopf_hoehe)
+            self.assertEqual(k.height(), self.b.zeit_eingabe.height())
+            self.assertLessEqual(k.mapTo(self.b, k.rect().topRight()).x(), rechts)  # passt in die Spalte
+            self.assertGreater(k.geometry().left(), feld.right())  # neben dem Feld, nichts überdeckt
+            self.assertEqual(k.focusPolicy(), Qt.FocusPolicy.NoFocus)
+        self.assertEqual(self.b.zeit_ok.accessibleName(), "Übernehmen")
+        self.assertEqual(self.b.zeit_weg.accessibleName(), "Abbrechen")
+        # „1:05:00“ passt noch ganz ins Feld
+        self.b.zeit_eingabe.setText("1:05:00")
+        breite = self.b.zeit_eingabe.fontMetrics().horizontalAdvance("1:05:00")
+        self.assertLess(breite, self.b.zeit_eingabe.width() - 24)
+
+    def test_haekchen_uebernimmt(self):
+        self.tippen("12:30", taste=None)
+        self.echter_klick(self.b.zeit_ok)
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+        self.assertFalse(self.b.zeit_ok.isVisible())
+        self.assertTrue(self.b.zeit.isVisible())
+        self.assertEqual(self.b.zeit.text(), "12:30")
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 750, 3000))
+        self.assertEqual(self.uno_patches(), [[{"subCompositionId": CONTENT, "payload": {"BeginTime": 750}}]])
+        self.assertEqual(self.e.restzeit_s(), 750)
+
+    def test_kreuz_bricht_ab(self):
+        self.tippen("9:99", taste=None)
+        self.echter_klick(self.b.zeit_weg)
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+        self.assertTrue(self.b.zeit.isVisible())
+        self.assertEqual(self.b.zeit.text(), "05:00")
+        warte(300)
+        self.assertEqual(self.uno_patches(), [])
+        self.assertEqual(self.e.werte[CONTENT]["BeginTime"], 300)
+        # danach geht es ganz normal wieder auf
+        self.tippen("4:00", taste=None)
+        self.echter_klick(self.b.zeit_ok)
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 240, 3000))
+
+    def test_haekchen_faengt_falsche_eingaben_ab_wie_enter(self):
+        t = self.E.texte
+        QTest.mouseClick(self.b.zeit, Qt.MouseButton.LeftButton)
+        for text, hinweis in [("abc", t.meldung_countdown_format), ("5:75", t.meldung_countdown_ueber_59),
+                              ("0:00", t.meldung_countdown_null), ("10:00:00",
+                               t.meldung_countdown_zu_lang.format(hoechstens="9:59:59")),
+                              ("5:3", t.meldung_countdown_format), ("", t.meldung_countdown_leer)]:
+            self.b.zeit_eingabe.selectAll()
+            QTest.keyClick(self.b.zeit_eingabe, Qt.Key.Key_Backspace)
+            QTest.keyClicks(self.b.zeit_eingabe, text)
+            self.echter_klick(self.b.zeit_ok)
+            self.assertTrue(self.b.zeit_eingabe.isVisible(), text)  # bleibt offen zum Verbessern
+            self.assertTrue(self.b.zeit_eingabe.hasFocus(), text)  # gleich weitertippen
+            self.assertEqual(self.b.zeit_eingabe.selectedText(), text, text)
+            self.assertEqual(self.b.meldung_zeit.text(), hinweis, text)
+            self.assertEqual(self.b.meldung_zeit.objectName(), "fehler")
+        QTest.keyClicks(self.b.zeit_eingabe, "7:00")  # tippt direkt über die markierte falsche Eingabe
+        self.echter_klick(self.b.zeit_ok)
+        self.assertFalse(self.b.meldung_zeit.isVisible())
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 420, 3000))
+        self.assertEqual(self.uno_patches(), [[{"subCompositionId": CONTENT, "payload": {"BeginTime": 420}}]])
+
+    def test_kreuz_nach_falscher_eingabe_raeumt_hinweis_weg(self):
+        self.tippen("abc", taste=None)
+        self.echter_klick(self.b.zeit_ok)
+        self.assertTrue(self.b.meldung_zeit.isVisible())
+        self.echter_klick(self.b.zeit_weg)
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+        self.assertFalse(self.b.meldung_zeit.isVisible())
+        self.assertEqual(self.b.zeit.text(), "05:00")
+
+    def test_haekchen_nachdem_live_geschaltet(self):
+        """Eingeblendet, während getippt wird, und Uno meldet es erst beim Klick: nichts übernehmen."""
+        self.tippen("8:00", taste=None)
+        self.b.overlay.sichtbar = True  # Zustand schon da, Fenster noch nicht neu gezeichnet
+        self.echter_klick(self.b.zeit_ok)
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+        self.assertEqual(self.b.meldung_zeit.text(), self.E.texte.meldung_countdown_live)
+        warte(300)
+        self.assertEqual(self.uno_patches(), [])
+        self.assertEqual(self.e.werte[CONTENT]["BeginTime"], 300)
+
+    def test_doppelt_auf_haekchen_schickt_nur_einmal(self):
+        self.tippen("3:00", taste=None)
+        # versehentlicher Doppelklick: zweimal Drücken+Loslassen sofort hintereinander
+        for _ in range(2):
+            QTest.mousePress(self.b.zeit_ok, Qt.MouseButton.LeftButton)
+            QTest.mouseRelease(self.b.zeit_ok, Qt.MouseButton.LeftButton)
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 180, 3000))
+        warte(300)
+        self.assertEqual(len(self.uno_patches()), 1)
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+
+    def test_tastatur_ohne_maus(self):
+        self.b.zeit.setFocus(Qt.FocusReason.TabFocusReason)
+        QTest.keyClick(self.b.zeit, Qt.Key.Key_Space)
+        self.assertTrue(self.b.zeit_eingabe.isVisible())
+        QTest.keyClicks(self.b.zeit_eingabe, "6:15")
+        QTest.keyClick(self.b.zeit_eingabe, Qt.Key.Key_Return)
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 375, 3000))
+
+    def test_veraltete_uno_antwort_dreht_die_zeit_nicht_zurueck(self):
+        o = self.b.overlay
+        alt_stand, alte_antwort = o.countdown_stand, self.e.control()  # Abfrage, bevor getippt wurde
+        self.tippen("12:30")
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 750, 3000))
+        self.uno._zustand_uebernehmen(o, alte_antwort, alt_stand)  # kommt erst jetzt an
+        self.assertEqual(o.dauer, 750)
+        self.assertEqual(self.b.zeit.text(), "12:30")
+        self.uno._zustand_uebernehmen(o, self.e.control(), o.countdown_stand)  # aktuelle Antwort gilt
+        self.assertEqual(o.dauer, 750)
+
+    def test_spaete_antwort_einer_frueheren_aenderung_gilt_nicht(self):
+        """Unter Last gefunden: „+1 Min“, dann schnell „2:00“ getippt. Die Antwort zu „+1 Min“ kam spät,
+        ihr Nachlesen zeigte kurz wieder die alte Zeit – und „−1 Min“ rechnete dann falsch."""
+        o = self.b.overlay
+        echt = self.uno._singular
+        gehalten = []
+
+        def singular(projekt, methode, pfad, daten, rueckruf):
+            if methode == "PATCH" and daten == [{"subCompositionId": CONTENT, "payload": {"BeginTime": 360}}]:
+                rueckruf_spaet = lambda *a: gehalten.append(lambda: rueckruf(*a))  # Antwort festhalten
+                return echt(projekt, methode, pfad, daten, rueckruf_spaet)
+            return echt(projekt, methode, pfad, daten, rueckruf)
+
+        self.uno._singular = singular
+        klick(self.b.dauer_knoepfe[60])  # 5:00 → 6:00, Antwort von Uno hängt
+        self.assertTrue(warte_bis(lambda: gehalten, 3000))
+        self.tippen("2:00")  # inzwischen getippt
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 120, 3000))
+        self.assertTrue(warte_bis(lambda: o.dauer == 120, 3000))
+        self.uno._abfrage.stop()  # nur die späte Antwort prüfen, nicht die regelmäßige Abfrage
+        warte(100)
+        # Die späte Antwort kommt an; ihr Nachlesen sieht bei Uno noch den Stand von „+1 Min“
+        self.e.werte[CONTENT]["BeginTime"] = 360
+        anfragen = len(self.netz.anfragen)
+        gehalten.pop()()
+        self.assertTrue(warte_bis(lambda: len(self.netz.anfragen) > anfragen, 3000))  # Nachlesen ist raus
+        warte(200)
+        self.assertEqual(o.dauer, 120)  # nicht zurückgedreht
+        self.assertEqual(self.b.zeit.text(), "02:00")
+        self.e.werte[CONTENT]["BeginTime"] = 120
+        klick(self.b.dauer_knoepfe[-60])  # rechnet mit 2:00 weiter
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 60, 3000))
+
+    def test_anderes_overlay_gewaehlt_schliesst_eingabe(self):
+        self.tippen("8:00", taste=None)
+        self.b.zeigen(self.b.overlay)
+        self.assertFalse(self.b.zeit_eingabe.isVisible())
+        self.assertTrue(self.b.zeit.isVisible())
+
     def test_endtext_aendern(self):
         self.b.eingabe("Message").setText("Gleich geht's los!")
         klick(self.b.knopf_uebernehmen)
@@ -346,6 +696,8 @@ class NeustartTest(Grundlage):
         self.netz.verzoegerung = 0
         klick(self.b.einblenden)
         self.assertTrue(warte_bis(lambda: self.netz.einzel.komplett_sichtbar(), 3000))
+        # erst klicken, wenn die Antwort von Uno auch im Fenster angekommen ist (sonst ist der Knopf noch aus)
+        self.assertTrue(warte_bis(lambda: self.b.ausblenden.isEnabled(), 3000))
         klick(self.b.ausblenden)
         self.assertTrue(warte_bis(lambda: self.netz.einzel.ganz_aus(), 3000))
         klick(self.b.knopf_texte_neu)

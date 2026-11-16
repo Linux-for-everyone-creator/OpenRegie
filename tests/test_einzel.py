@@ -113,5 +113,42 @@ class RestzeitTest(unittest.TestCase):
         self.assertIsNone(einzel.dauer_sekunden("abc"))
 
 
+class ZeitLesenTest(unittest.TestCase):
+    """Eingetippte Countdown-Zeit verstehen (Klick auf die große Zeit)."""
+    HOECHST = 35999  # 9:59:59 wie in einstellungen.toml
+
+    def lesen(self, text):
+        return einzel.zeit_lesen(text, self.HOECHST)
+
+    def test_gueltige_zeiten(self):
+        for text, sekunden in [("5:00", 300), ("12:30", 750), ("05:00", 300), ("0:30", 30), ("0:01", 1),
+                               ("5", 300), ("90", 5400), ("90:00", 5400), ("1:05:00", 3900), ("9:59:59", 35999),
+                               (" 5 : 00 ", 300), ("5.30", 330), ("5,30", 330), ("599:59", 35999)]:
+            self.assertEqual(self.lesen(text), (sekunden, ""), text)
+
+    def test_buchstaben_und_unsinn(self):
+        for text in ["abc", "5:0a", "fünf", "5:", ":30", "5::00", "-5:00", "5:3", "5:300", "1:2:3",
+                     "+5", "5 Min", "1:00:00:00", "12345", "٥:٠٠", "5e2", "0x10"]:
+            self.assertEqual(self.lesen(text), (None, einzel.ZEIT_FORMAT), text)
+
+    def test_unmoegliche_zeiten(self):
+        for text in ["5:60", "5:99", "1:60:00", "1:00:60"]:
+            self.assertEqual(self.lesen(text), (None, einzel.ZEIT_UEBER_59), text)
+        for text in ["0", "0:00", "00:00", "0:00:00"]:
+            self.assertEqual(self.lesen(text), (None, einzel.ZEIT_NULL), text)
+        for text in ["10:00:00", "600:00", "9999", "9:59:60"]:
+            self.assertIn(self.lesen(text)[1], (einzel.ZEIT_ZU_LANG, einzel.ZEIT_UEBER_59), text)
+        self.assertEqual(self.lesen("10:00:00"), (None, einzel.ZEIT_ZU_LANG))
+        for text in ["", "   ", None]:
+            self.assertEqual(self.lesen(text), (None, einzel.ZEIT_LEER), repr(text))
+
+    def test_hat_gezaehlt(self):
+        self.assertFalse(einzel.hat_gezaehlt(None))
+        self.assertFalse(einzel.hat_gezaehlt({"value": 0, "UTC": 0, "isRunning": False}))
+        self.assertTrue(einzel.hat_gezaehlt({"value": 0, "UTC": 5, "isRunning": True}))
+        self.assertTrue(einzel.hat_gezaehlt({"value": 1200, "UTC": 0, "isRunning": False}))
+        self.assertTrue(einzel.hat_gezaehlt({"value": "kaputt", "isRunning": False}))
+
+
 if __name__ == "__main__":
     unittest.main()

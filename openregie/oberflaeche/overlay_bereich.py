@@ -11,8 +11,10 @@ Bedienung nur mit einfachem Klick. Texte werden in große Felder getippt.
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel,
                                QLineEdit, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
@@ -82,6 +84,91 @@ def meldung() -> _Meldung:
     m.setObjectName("meldung")
     m.setVisible(False)
     return m
+
+
+class _ZeitAnzeige(QLabel):
+    """Die große Countdown-Zeit. Einfacher Klick (oder Enter/Leertaste nach Tab) → geklickt."""
+
+    geklickt = Signal()
+
+    def __init__(self, text: str, name: str):
+        super().__init__(text)
+        self.setObjectName(name)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
+            self.geklickt.emit()
+        super().mouseReleaseEvent(e)
+
+    def mouseDoubleClickEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self.geklickt.emit()  # öffnet nur, wenn noch nicht offen
+        super().mouseDoubleClickEvent(e)
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.geklickt.emit()
+            return
+        super().keyPressEvent(e)
+
+
+class _ZeitEingabe(QLineEdit):
+    """Feld zum Eintippen der Countdown-Zeit. Enter → returnPressed, Esc oder Wegklicken → abbrechen.
+    Die Knöpfe ✓/✕ daneben tun dasselbe (siehe OverlayBedienfeld)."""
+
+    abbrechen = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("countdown_eingabe")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setMaxLength(12)
+        self._geoeffnet = 0.0
+        self.hoehe = 0  # so hoch wie die große Zeit (setzt das Bedienfeld)
+
+    def oeffnen(self, text: str) -> None:
+        if self.hoehe:
+            self.setFixedHeight(self.hoehe)  # erst hier: das Aussehen (QSS) setzt sonst eine kleinere Höhe
+        self.setText(text)
+        self.show()
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
+        self.selectAll()  # gleich lostippen: ersetzt die alte Zeit
+        self._geoeffnet = time.monotonic()
+
+    def _gerade_geoeffnet(self) -> bool:
+        # Zweiter Klick eines Doppelklicks: nicht die Auswahl aufheben
+        ms = QGuiApplication.styleHints().mouseDoubleClickInterval()
+        return (time.monotonic() - self._geoeffnet) * 1000 < ms
+
+    def mousePressEvent(self, e):
+        if self._gerade_geoeffnet():
+            return
+        super().mousePressEvent(e)
+
+    def mouseDoubleClickEvent(self, e):
+        if self._gerade_geoeffnet():
+            return
+        super().mouseDoubleClickEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if self._gerade_geoeffnet():
+            return
+        super().mouseReleaseEvent(e)
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key.Key_Escape:
+            self.abbrechen.emit()
+            return
+        super().keyPressEvent(e)
+
+    def focusOutEvent(self, e):
+        super().focusOutEvent(e)
+        # Nur echtes Wegklicken/Tab bricht ab – nicht Fensterwechsel oder das Rechtsklick-Menü
+        if self.isVisible() and e.reason() not in (Qt.FocusReason.ActiveWindowFocusReason,
+                                                   Qt.FocusReason.PopupFocusReason):
+            self.abbrechen.emit()
 
 
 def _fest(k, breite: int | None = None):
@@ -329,6 +416,8 @@ class Bibliothek(QWidget):
 #  Rechte Spalte: AUSGEWÄHLT
 # ---------------------------------------------------------------------------
 class OverlayBedienfeld(QWidget):
+    HINWEIS_MS = 4000  # so lange bleibt der Hinweis „gesperrt“ stehen, dann verschwindet er von selbst
+
     def __init__(self, E, uno: UnoVerwaltung, parent=None):
         super().__init__(parent)
         self.E = E
@@ -363,9 +452,52 @@ class OverlayBedienfeld(QWidget):
         cl = QVBoxLayout(self.countdown)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(g.abstand // 2)
-        self.zeit = beschriftung("--:--", "countdown_anzeige")
+        self.zeit = _ZeitAnzeige("--:--", "countdown_anzeige")
         self.zeit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.zeit.geklickt.connect(self._zeit_bearbeiten)
         cl.addWidget(self.zeit)
+        self.zeit_eingabe = _ZeitEingabe()  # erscheint an Stelle der Zeit, solange getippt wird
+        self.zeit_eingabe.setAccessibleName(t.countdown_zeit_tippen)
+        self.zeit_eingabe.returnPressed.connect(self._zeit_uebernehmen)
+        self.zeit_eingabe.abbrechen.connect(self._zeit_abbrechen)
+        # Daneben zwei große Knöpfe für alle, die kein Enter/Esc drücken können.
+        # Sie nehmen nie den Fokus: ein Klick darauf ist kein „Wegklicken“ und bricht nichts ab.
+        self.zeit_ok = knopf(t.knopf_zeit_uebernehmen, "zeit_ok")
+        self.zeit_weg = knopf(t.knopf_zeit_abbrechen, "zeit_weg")
+        for k, name in ((self.zeit_ok, t.knopf_zeit_uebernehmen_name), (self.zeit_weg, t.knopf_zeit_abbrechen_name)):
+            k.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            k.setToolTip(name)
+            k.setAccessibleName(name)
+        self.zeit_ok.clicked.connect(self._zeit_uebernehmen)
+        self.zeit_weg.clicked.connect(self._zeit_abbrechen)
+        self.zeit_bearbeitung = QWidget()  # Eingabefeld + Knöpfe, an Stelle der großen Zeit
+        # Wichtig: Klickt man einen Knopf ohne Fokus, gibt Qt den Fokus an das nächste Eltern-Element,
+        # das ihn annimmt – das Feld verlöre ihn und würde abbrechen. Dieses Element hier nimmt den Klick-
+        # Fokus an und reicht ihn sofort ans Feld zurück, das ihn schon hat: kein Fokuswechsel.
+        self.zeit_bearbeitung.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.zeit_bearbeitung.setFocusProxy(self.zeit_eingabe)
+        zb = QHBoxLayout(self.zeit_bearbeitung)
+        zb.setContentsMargins(0, 0, 0, 0)
+        zb.setSpacing(g.abstand // 2)
+        zb.addWidget(self.zeit_eingabe, 1)
+        zb.addWidget(self.zeit_ok)
+        zb.addWidget(self.zeit_weg)
+        self.zeit_bearbeitung.hide()
+        cl.addWidget(self.zeit_bearbeitung)
+        # Feste Höhe: die große Zeit wird nie gequetscht (z. B. wenn ein Hinweis erscheint),
+        # und das Eingabefeld ist genauso groß wie die Anzeige
+        gross = QFont(self.zeit.font())
+        gross.setPixelSize(int(g.schrift_countdown))
+        gross.setWeight(QFont.Weight.ExtraBold)
+        hoehe = QFontMetrics(gross).height() + 20  # + Innenabstand und Rahmen
+        self.zeit.setFixedHeight(hoehe)
+        self.zeit_eingabe.hoehe = hoehe
+        self.meldung_zeit = meldung()  # Hinweise zur eingetippten Zeit
+        self.meldung_zeit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cl.addWidget(self.meldung_zeit)
+        self._meldung_zeit_uhr = QTimer(self)  # Hinweis „gesperrt“ verschwindet von selbst
+        self._meldung_zeit_uhr.setSingleShot(True)
+        self._meldung_zeit_uhr.timeout.connect(lambda: self._hinweis_zeit(""))
         self.countdown_zustand = beschriftung("", "gedimmt")
         self.countdown_zustand.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(self.countdown_zustand)
@@ -439,6 +571,8 @@ class OverlayBedienfeld(QWidget):
 
     # ------------------------------------------------------------------
     def zeigen(self, overlay: Overlay) -> None:
+        self._zeit_abbrechen()
+        self._hinweis_zeit("")
         self.overlay = overlay
         self.meldung_schalter.zeigen("")
         self.meldung_texte.zeigen("")
@@ -462,6 +596,7 @@ class OverlayBedienfeld(QWidget):
             self.tally_text.setStyleSheet(f"color: {f.text_gedimmt};")
             for k in (self.einblenden, self.ausblenden, self.knopf_uebernehmen, self.knopf_texte_neu):
                 k.setEnabled(False)
+            self._zeit_abbrechen()
             self.countdown.setVisible(False)
             return
         if o.sichtbar:
@@ -502,6 +637,93 @@ class OverlayBedienfeld(QWidget):
         self.countdown_zustand.setText(zustand)
         self.start.setEnabled(not laeuft and rest != 0)
         self.pause.setEnabled(laeuft)
+        # Zeit eintippen: gesperrt, solange der Countdown im Stream ist
+        gesperrt = self._zeit_gesperrt(o)
+        if gesperrt and self.zeit_eingabe.isVisible():
+            self._zeit_abbrechen()  # wurde inzwischen eingeblendet: nichts übernehmen
+            self._hinweis_zeit(gesperrt, False, von_selbst_weg=True)
+        hilfe = gesperrt or t.countdown_zeit_tippen
+        if self.zeit.toolTip() != hilfe:
+            self.zeit.setCursor(Qt.CursorShape.ForbiddenCursor if gesperrt else Qt.CursorShape.IBeamCursor)
+            self.zeit.setToolTip(hilfe)
+            self.zeit.setAccessibleDescription(hilfe)
+
+    # --- Countdown-Zeit eintippen ---------------------------------------------
+    def _zeit_gesperrt(self, o: Overlay | None) -> str:
+        """Warum die Zeit gerade nicht eingetippt werden darf ("" = darf)."""
+        t = self.E.texte
+        if o is None or not o.hat_countdown or not o.bereit:
+            return t.meldung_countdown_geht_nicht
+        if o.sichtbar is True:
+            return t.meldung_countdown_live  # im Stream: nichts aus Versehen verändern
+        if not (o.bauplan and o.bauplan.dauer) or o.dauer is None:
+            return t.meldung_countdown_geht_nicht
+        return ""
+
+    def _hinweis_zeit(self, text: str, erfolg: bool | None = None, von_selbst_weg: bool = False) -> None:
+        self._meldung_zeit_uhr.stop()
+        self.meldung_zeit.zeigen(text, erfolg)
+        # Umbrochener Text: Qt rechnet sonst nur mit einer Zeile und schiebt ihn über die große Zeit
+        breite = self.countdown.width() or self.width()
+        self.meldung_zeit.setMinimumHeight(self.meldung_zeit.heightForWidth(breite) if text and breite > 0 else 0)
+        if text and von_selbst_weg:
+            self._meldung_zeit_uhr.start(self.HINWEIS_MS)
+
+    def _zeit_bearbeiten(self) -> None:
+        """Klick auf die Zeit: Eingabefeld öffnen – oder kurz sagen, warum es gerade nicht geht."""
+        if not self.zeit_bearbeitung.isHidden():
+            return  # schon offen (z. B. zweiter Klick eines Doppelklicks)
+        gesperrt = self._zeit_gesperrt(self.overlay)
+        if gesperrt:
+            self._hinweis_zeit(gesperrt, False, von_selbst_weg=True)
+            return
+        self._hinweis_zeit("")
+        self.zeit.hide()
+        self.zeit_bearbeitung.show()
+        for k in (self.zeit_ok, self.zeit_weg):  # erst hier: das Aussehen (QSS) setzt sonst andere Maße
+            k.setFixedSize(self.zeit_eingabe.hoehe, self.zeit_eingabe.hoehe)  # quadratisch, so hoch wie das Feld
+        self.zeit_eingabe.oeffnen(self.zeit.text())
+
+    def _zeit_abbrechen(self) -> None:
+        if self.zeit_bearbeitung.isHidden() and not self.zeit.isHidden():
+            return  # es wird gerade nicht getippt
+        self.zeit_bearbeitung.hide()
+        self.zeit.show()
+        if not self._meldung_zeit_uhr.isActive():
+            self._hinweis_zeit("")  # Fehler zur Eingabe gehören zur Eingabe
+
+    def _zeit_uebernehmen(self) -> None:
+        o, t = self.overlay, self.E.texte
+        if self.zeit_bearbeitung.isHidden():
+            return  # schon zu (z. B. zweiter Klick eines Doppelklicks auf ✓): nichts doppelt schicken
+        gesperrt = self._zeit_gesperrt(o)
+        if gesperrt:  # z. B. gerade eingeblendet worden
+            self._zeit_abbrechen()
+            self._hinweis_zeit(gesperrt, False, von_selbst_weg=True)
+            return
+        hoechstens = int(self.E.uno.countdown_hoechstdauer_sekunden)
+        sekunden, fehler = einzel.zeit_lesen(self.zeit_eingabe.text(), hoechstens)
+        if sekunden is None:
+            text = {
+                einzel.ZEIT_LEER: t.meldung_countdown_leer,
+                einzel.ZEIT_UEBER_59: t.meldung_countdown_ueber_59,
+                einzel.ZEIT_NULL: t.meldung_countdown_null,
+                einzel.ZEIT_ZU_LANG: t.meldung_countdown_zu_lang.format(
+                    hoechstens=einzel.zeit_text(hoechstens * 1000)),
+            }.get(fehler, t.meldung_countdown_format)
+            self._hinweis_zeit(text, False)  # Feld bleibt offen zum Verbessern
+            self.zeit_eingabe.selectAll()
+            return
+        self._zeit_abbrechen()
+        self.meldung_schalter.zeigen("")
+        overlay = o
+
+        def fertig(ok, fehler_text):
+            if not ok and fehler_text and overlay is self.overlay:
+                self._hinweis_zeit(fehler_text, False)
+
+        self.uno.countdown_zeit_setzen(o, sekunden, fertig)
+        self._countdown_zeigen()
 
     def _overlay_geaendert(self, overlay: Overlay) -> None:
         if overlay is not self.overlay:
@@ -526,6 +748,7 @@ class OverlayBedienfeld(QWidget):
     def _timer(self, befehl: str) -> None:
         if self.overlay is None:
             return
+        self._zeit_abbrechen()
         self.meldung_schalter.zeigen("")
         self.uno.timer_befehl(self.overlay, befehl,
                               lambda ok, fehler: self.meldung_schalter.zeigen(fehler, False) if fehler else None)
@@ -534,6 +757,7 @@ class OverlayBedienfeld(QWidget):
         o = self.overlay
         if o is None or o.dauer is None:
             return
+        self._zeit_abbrechen()
         self.uno.dauer_setzen(o, o.dauer + schritt,
                               lambda ok, fehler: self.meldung_schalter.zeigen(fehler, False) if fehler else None)
         self._countdown_zeigen()

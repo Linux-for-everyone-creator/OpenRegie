@@ -65,6 +65,13 @@ def stylesheet(E) -> str:
     }}
     QLineEdit:hover {{ border-color: {f.knopf_hover_rahmen}; }}
     QLineEdit:focus {{ border-color: {f.knopf_fokus_rahmen}; }}
+    /* Countdown-Zeit eintippen: genauso groß wie die Anzeige */
+    QLineEdit#countdown_eingabe {{
+        font-size: {g.schrift_countdown}px; font-weight: 800;
+        padding: 4px 12px;
+    }}
+    QLabel#countdown_anzeige:hover {{ border-color: {f.knopf_hover_rahmen}; }}
+    QLabel#countdown_anzeige:focus {{ border-color: {f.knopf_fokus_rahmen}; }}
 
     QScrollArea {{ border: none; }}
     QScrollBar:vertical {{
@@ -116,4 +123,12 @@ def stylesheet(E) -> str:
     QPushButton#einblenden:disabled, QPushButton#ausblenden:disabled, QPushButton#twitch:disabled {{
         background-color: {f.knopf_aus}; color: {f.knopf_aus_text}; border-color: {f.knopf_aus};
     }}
+    /* Countdown-Zeit: Häkchen (übernehmen) und Kreuz (abbrechen) neben dem Eingabefeld */
+    QPushButton#zeit_ok, QPushButton#zeit_weg {{
+        min-width: 0px; padding: 0px; font-size: {int(g.schrift_titel) + 14}px; font-weight: 800;
+    }}
+    QPushButton#zeit_ok {{ background-color: {f.einblenden}; border-color: {f.einblenden}; }}
+    QPushButton#zeit_weg {{ background-color: {f.ausblenden}; border-color: {f.ausblenden}; }}
+    QPushButton#zeit_ok:hover, QPushButton#zeit_weg:hover {{ border-color: {f.knopf_hover_rahmen}; }}
+    QPushButton#zeit_ok:pressed, QPushButton#zeit_weg:pressed {{ background-color: {f.knopf_gedrueckt}; }}
     """

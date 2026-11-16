@@ -43,6 +43,14 @@ OpenRegie wird Open Source: keine Geheimnisse im Code, Zugangsdaten nur im Passw
 - [x] Grundregel „Ein Regiepult friert nie ein“: Zeitlimit für Uno, Passwortspeicher im Hintergrund
 - [x] Uno-Quellen automatisch in jeder OBS-Szene und immer ganz oben; alte Countdown-Quelle entfernt
 - [x] Ausblenden über den Uno-Schalter „ShowOverlay“: Countdown verschwindet sanft in der Mitte
+- [x] Countdown-Zeit direkt eintippen: Klick auf die große Zeit, z. B. „5:00“ tippen, Enter übernimmt,
+      Esc bricht ab. Gesperrt, solange der Countdown im Stream ist (kurzer Hinweis, der von selbst
+      verschwindet). Falsche Eingaben bekommen einen verständlichen Hinweis. Die Knöpfe „±1/±10 Min“
+      bleiben und rechnen mit derselben Zeit weiter. *(16.11.2026)*
+- [x] Countdown-Zeit eintippen mit dem echten Uno geprüft (13 von 13, 16.11.2026)
+- [x] Countdown-Zeit ohne Enter/Esc: große Knöpfe ✓ „Übernehmen“ und ✕ „Abbrechen“ neben dem Feld.
+      Ein Klick darauf bricht nicht ab, falsche Eingaben werden wie bei Enter abgefangen, Enter und Esc
+      gehen weiter. Mit dem echten Uno geprüft (20 von 20). *(16.11.2026)*
 - [ ] Twitch-App anlegen und Client-ID eintragen
 
 ### Build 1.2

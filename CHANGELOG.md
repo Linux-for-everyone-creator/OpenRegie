@@ -2,6 +2,66 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.1 – Countdown-Zeit direkt eintippen · 16.11.2026
+
+**Neu**
+- Einfach auf die große Countdown-Zeit klicken (Doppelklick geht auch), die neue Zeit eintippen, Enter –
+  fertig. Die alte Zeit ist schon markiert, man tippt also einfach drüber. Esc oder Wegklicken bricht ab.
+- **Ohne Enter und Esc:** Neben dem Eingabefeld stehen zwei große Knöpfe, so hoch wie das Feld –
+  grün mit Häkchen ✓ „Übernehmen“ (wie Enter) und rot mit Kreuz ✕ „Abbrechen“ (wie Esc). Sie sind nur
+  zu sehen, solange getippt wird. Ein Klick darauf zählt **nicht** als Wegklicken: das Feld bleibt
+  offen, bis der Knopf wirkt. Falsche Eingaben fängt ✓ genauso ab wie Enter (Hinweis in Rot, Feld bleibt
+  offen, die falsche Eingabe ist markiert und wird beim Weitertippen ersetzt). Enter und Esc gehen weiter.
+- Was man tippen kann: `5:00`, `12:30`, `90:00`, `1:05:00` – oder nur `5` für 5 Minuten.
+  `5.30` und `5,30` gehen auch. Höchstens 9:59:59 (wie bei den Knöpfen, `einstellungen.toml`).
+- **Im Stream gesperrt:** Ist der Countdown gerade eingeblendet (Lampe rot), öffnet ein Klick kein Feld,
+  sondern zeigt kurz „Der Countdown ist gerade im Stream. Zum Ändern der Zeit erst ausblenden.“ –
+  der Hinweis verschwindet nach 4 Sekunden von selbst. Wird eingeblendet, während man noch tippt,
+  geht das Feld zu und nichts wird übernommen.
+- Vertippt? Buchstaben, `5:75`, `0:00` oder zu lang gibt einen kurzen Hinweis in Rot, das Feld bleibt
+  offen zum Verbessern. Es wird nichts an Uno geschickt.
+- Die Knöpfe „−10 / −1 / +1 / +10 Min“ bleiben und arbeiten mit derselben Zeit: erst `12:30` tippen,
+  dann „+1 Min“ ergibt 13:30.
+- Wenn der Countdown schon gelaufen ist (angehalten oder abgelaufen), steht er nach dem Eintippen
+  genau auf der neuen Zeit und ist wieder „Bereit“. Das geht als **ein** Befehl an Uno (neue Dauer
+  `BeginTime` + Zurücksetzen), damit Overlay und OpenRegie dieselbe Zeit zeigen.
+- Nimmt Uno die neue Zeit nicht an, zeigt OpenRegie wieder die alte Zeit (nichts vorgaukeln).
+
+**Behoben (beim Prüfen gefunden)**
+- Knöpfe ✓/✕: Beim ersten Versuch ging das Feld schon beim *Drücken* eines der Knöpfe zu – Qt gibt den
+  Fokus bei einem Klick an das nächste übergeordnete Element weiter, das Feld verlor ihn und das galt
+  als Wegklicken. Jetzt reicht der Rahmen um Feld und Knöpfe den Fokus ans Feld zurück.
+- Ein schneller Doppelklick auf ✓ schickt die Zeit nur einmal an Uno.
+- Klickt man schnell hintereinander (z. B. „+1 Min“ und gleich danach eine Zeit eintippen), konnte eine
+  verspätete Antwort von Uno die Anzeige kurz auf die alte Zeit zurückdrehen – und der nächste
+  „±1 Min“-Klick rechnete dann mit der falschen Zeit. Jetzt zählt nur noch die Antwort zur neuesten
+  Änderung. Das gilt auch für die Minuten-Knöpfe.
+- Test „Neustart mit Einzel-Uno“: Er klickte „Ausblenden“, bevor die Antwort auf „Einblenden“ im
+  Fenster angekommen war, und schlug deshalb ab und zu fehl (auch schon vorher, 2 von 10 Läufen).
+  Nur der Test wartet jetzt richtig, am Programm hat sich dafür nichts geändert.
+
+**Geprüft**
+- 182 automatische Tests (25 neu), dreimal hintereinander ohne Fehler; die neuen Countdown-Tests
+  zusätzlich viele Male, auch drei gleichzeitig unter Last (Knöpfe ✓/✕: 30 von 30 Läufen).
+- Neu für die Knöpfe: ✓ übernimmt, ✕ bricht ab, alle falschen Eingaben mit ✓, ✕ räumt den Hinweis weg,
+  ✓ nach dem Einblenden schickt nichts, Doppelklick auf ✓ schickt nur einmal, Größe und Platz (passen
+  neben das Feld in die Spalte, auch „1:05:00“). Gegenprobe: ohne die Fokus-Korrektur schlagen die
+  Knopf-Tests genau mit dem gefundenen Fehler fehl, ohne den Doppelklick-Schutz der Doppelklick-Test.
+- Neu u. a.: Eintippen kommt bei Uno an, Esc, alle falschen Eingaben, gesperrt im Stream mit Hinweis,
+  der von selbst verschwindet, live geschaltet während des Tippens, Doppelklick, nur Tastatur,
+  angehaltener Countdown, Uno lehnt ab, verspätete Antwort (Gegenprobe: ohne Korrektur schlägt der
+  Test genau mit dem gefundenen Fehler fehl).
+- Aussehen mit Standbildern geprüft: Eingabefeld genauso groß wie die Zeit, Hinweise schieben nichts
+  übereinander.
+- **Mit dem echten Uno geprüft: 13 von 13.** Eintippen kommt an (Uno speichert genau die Sekunden),
+  Dauer + Zurücksetzen in einem Befehl nimmt Uno an (Zeitgeber steht danach auf Anfang und läuft nicht
+  los), OpenRegie zeigt dieselbe Zeit wie Uno. Danach alte Dauer (4:48:40) wiederhergestellt, Countdown
+  blieb die ganze Zeit ausgeblendet.
+- **Knöpfe ✓/✕ mit dem echten Uno geprüft: 20 von 20.** ✓ übernimmt, Feld bleibt beim Drücken offen,
+  fünf falsche Eingaben mit ✓ kommen nicht bei Uno an, ✕ ändert nichts, Enter und Esc gehen weiter,
+  OpenRegie und Uno zeigen dieselbe Zeit. Countdown die ganze Zeit ausgeblendet, danach Dauer 4:50
+  wiederhergestellt.
+
 ## Build 1.1 – Korrektur: Countdown blendet in der Mitte aus · 14.11.2026
 
 **Behoben**
