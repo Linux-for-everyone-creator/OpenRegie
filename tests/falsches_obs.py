@@ -50,7 +50,9 @@ class FalschesObs(QObject):
         self.szene = "Szene 1"
         self.szenen = {"Szene 1": [], "Pause": []}  # Szene -> Liste von (id, quellenname, an)
         self.quellen: dict[str, dict] = {}  # name -> {"kind":..., "settings":...}
-        self.arten = ["browser_source", "image_source", "color_source_v3"]
+        self.arten = ["browser_source", "image_source", "color_source_v3", "v4l2_input",
+                      "pipewire-screen-capture-source", "pipewire-window-capture-source"]
+        self.geraete = [{"itemName": "Logitech BRIO", "itemValue": "/dev/video0", "itemEnabled": True}]
         self.naechste_id = 1
         self.transform: dict[int, dict] = {}
         self.bild = testbild_daten()
@@ -110,9 +112,62 @@ class FalschesObs(QObject):
         if typ == "GetCurrentProgramScene":
             return (*OK, {"sceneName": self.szene, "currentProgramSceneName": self.szene})
         if typ == "GetSourceScreenshot":
-            if d.get("sourceName") not in self.szenen:
+            if d.get("sourceName") not in self.szenen and d.get("sourceName") not in self.quellen:
                 return (False, 600, "No source was found by the name of `x`.", None)
             return (*OK, {"imageData": self.bild})
+        if typ == "SetCurrentProgramScene":
+            if d.get("sceneName") not in self.szenen:
+                return (False, 600, "No scene", None)
+            self.szene_wechseln(d["sceneName"])
+            return (*OK, None)
+        if typ == "CreateScene":
+            if d["sceneName"] in self.szenen or d["sceneName"] in self.quellen:
+                return (False, 601, "A source already exists by that scene name.", None)
+            self.szene_anlegen(d["sceneName"])
+            return (*OK, {"sceneUuid": "s"})
+        if typ == "RemoveScene":
+            if d["sceneName"] not in self.szenen:
+                return (False, 600, "No scene", None)
+            del self.szenen[d["sceneName"]]
+            if self.szene == d["sceneName"]:
+                self.szene_wechseln(next(iter(self.szenen)))
+            self.ereignis("SceneRemoved", {"sceneName": d["sceneName"]})
+            return (*OK, None)
+        if typ == "SetSceneName":
+            alt, neu = d["sceneName"], d["newSceneName"]
+            if alt not in self.szenen:
+                return (False, 600, "No scene", None)
+            if neu in self.szenen or neu in self.quellen:
+                return (False, 601, "A source already exists by that new scene name.", None)
+            self.szenen = {(neu if k == alt else k): v for k, v in self.szenen.items()}
+            if self.szene == alt:
+                self.szene = neu
+            self.ereignis("SceneNameChanged", {"oldSceneName": alt, "sceneName": neu})
+            return (*OK, None)
+        if typ == "SetInputName":
+            alt, neu = d["inputName"], d["newInputName"]
+            if alt not in self.quellen:
+                return (False, 600, "No source", None)
+            if neu in self.szenen or neu in self.quellen:
+                return (False, 601, "A source already exists by that new input name.", None)
+            self.quellen = {(neu if k == alt else k): v for k, v in self.quellen.items()}
+            for szene in self.szenen:
+                self.szenen[szene] = [(k, neu if n == alt else n, an) for k, n, an in self.szenen[szene]]
+            self.ereignis("InputNameChanged", {"oldInputName": alt, "inputName": neu})
+            return (*OK, None)
+        if typ == "RemoveSceneItem":
+            liste = self.szenen.get(d["sceneName"])
+            if liste is None or not any(e[0] == d["sceneItemId"] for e in liste):
+                return (False, 600, "No scene item", None)
+            self.szenen[d["sceneName"]] = [e for e in liste if e[0] != d["sceneItemId"]]
+            self.ereignis("SceneItemRemoved", {"sceneName": d["sceneName"], "sceneItemId": d["sceneItemId"]})
+            return (*OK, None)
+        if typ == "GetInputPropertiesListPropertyItems":
+            if d.get("inputName") not in self.quellen:
+                return (False, 600, "No source", None)
+            return (*OK, {"propertyItems": list(self.geraete) if d.get("propertyName") == "device_id" else []})
+        if typ == "SetSceneItemIndex" and d.get("sceneName") not in self.szenen:
+            return (False, 600, "No scene", None)
         if typ == "GetSceneCollectionList":
             return (*OK, {"currentSceneCollectionName": self.sammlung, "sceneCollections": list(self.sammlungen)})
         if typ == "SetCurrentSceneCollection":
@@ -136,6 +191,7 @@ class FalschesObs(QObject):
             del self.quellen[d["inputName"]]
             for szene in self.szenen:
                 self.szenen[szene] = [e for e in self.szenen[szene] if e[1] != d["inputName"]]
+            self.ereignis("InputRemoved", {"inputName": d["inputName"]})
             return (*OK, None)
         if typ == "GetSceneItemList":
             if d.get("sceneName") not in self.szenen:
@@ -184,7 +240,8 @@ class FalschesObs(QObject):
                     return (*OK, {"sceneItemId": kennung})
             return (False, 600, "No scene items were found", None)
         if typ == "CreateSceneItem":
-            if d.get("sceneName") not in self.szenen or d.get("sourceName") not in self.quellen:
+            if d.get("sceneName") not in self.szenen or (d.get("sourceName") not in self.quellen
+                                                         and d.get("sourceName") not in self.szenen):
                 return (False, 600, "No scene or source", None)
             kennung = self._in_szene(d["sceneName"], d["sourceName"], d.get("sceneItemEnabled", True))
             return (*OK, {"sceneItemId": kennung})

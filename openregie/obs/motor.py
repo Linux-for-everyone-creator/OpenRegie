@@ -114,6 +114,14 @@ class ObsMotor(QObject):
             prozess.kill()
             prozess.waitForFinished(2000)
 
+    def neu_verbinden(self) -> None:
+        """Knopf „Neu verbinden“."""
+        self._verbindung.jetzt_neu_verbinden()
+
+    def stream_beenden(self) -> None:
+        """Den laufenden Stream beenden (z. B. vor dem Schließen)."""
+        self._verbindung.anfrage("StopStream")
+
     def obs_laeuft(self) -> bool:
         return bool(self._obs_laeuft())
 

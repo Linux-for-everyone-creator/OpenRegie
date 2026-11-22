@@ -223,7 +223,7 @@ class VorschauBild(QWidget):
         self._E = E
         self._bild: QPixmap | None = None
         self._text = E.texte.vorschau_keine_verbindung
-        self.setMinimumSize(320, 180)
+        self.setMinimumSize(288, 162)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def bild_setzen(self, bild: QImage) -> None:

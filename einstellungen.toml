@@ -55,6 +55,18 @@ qualitaet = 75
 
 
 # ---------------------------------------------------------------------
+#  Shots (Szenen aus OBS als große Kacheln unten, wie bei Wirecast)
+# ---------------------------------------------------------------------
+[quellen]
+# Alle wie viel Sekunden die kleinen Vorschaubilder der Kacheln neu geholt werden.
+# Nur solange die Shot-Leiste offen ist – zugeklappt holt OpenRegie gar keine Bilder.
+vorschau_sekunden = 5
+# Breite der kleinen Vorschaubilder in Pixeln und Bildqualität (1 bis 100).
+vorschau_breite = 320
+vorschau_qualitaet = 60
+
+
+# ---------------------------------------------------------------------
 #  Overlays.uno (alle Grafiken im Stream kommen von dort)
 # ---------------------------------------------------------------------
 [uno]
@@ -166,6 +178,12 @@ kachel_hoehe = 120
 kachel_rahmen = 4
 schrift_kachel_zeit = 34
 schrift_countdown = 64
+# Shot-Kacheln unten (Höhe des Bildes, ohne Name)
+shot_kachel_hoehe = 108
+# Mindestbreite einer Shot-Kachel: so viele passen nebeneinander, weitere mit ◀ ▶ blättern
+shot_kachel_breite = 170
+# Quellen-Kacheln rechts unter „AUSGEWÄHLT“
+quelle_kachel_hoehe = 84
 seitenleiste_breite = 560
 eingabe_hoehe = 64
 # Deckkraft der Build-Anzeige: 0 = unsichtbar, 1 = voll.
@@ -321,6 +339,84 @@ meldung_twitch_code_abgelaufen = "Der Code ist abgelaufen. Bitte noch einmal auf
 meldung_twitch_abgelehnt = "Die Anmeldung wurde nicht bestätigt. Bitte noch einmal versuchen."
 meldung_twitch_neu_anmelden = "Die Twitch-Anmeldung ist abgelaufen. Bitte neu anmelden."
 meldung_twitch_client_id_falsch = "Twitch kennt die Client-ID nicht. Bitte in einstellungen.toml bei [twitch] prüfen."
+
+# Shots (unten, wie bei Wirecast) – ein Klick schaltet live
+shots_ueberschrift = "Shots"
+knopf_shots_zu = "▾"
+knopf_shots_zu_name = "Shots zuklappen"
+knopf_shots_auf = "▸  Shots zeigen"
+knopf_shots_bearbeiten = "✎"
+knopf_shots_bearbeiten_name = "Shots bearbeiten"
+knopf_shots_fertig = "✓  Fertig"
+knopf_shots_fertig_kurz = "✓"
+shots_bearbeiten_hinweis = "Shots bearbeiten: Dann öffnet ein Klick auf einen Shot rechts das Bearbeiten (geht nicht live)."
+knopf_blaettern_zurueck = "◀"
+knopf_blaettern_vor = "▶"
+knopf_blaettern_zurueck_name = "Vorherige Shots"
+knopf_blaettern_vor_name = "Weitere Shots"
+shot_hinzufuegen = "Shot hinzufügen"
+shots_leer = "Noch keine Shots."
+shots_keine_verbindung = "Die Shots erscheinen, sobald OBS verbunden ist."
+shot_live = "Live"
+shot_quellen = "QUELLEN IN DIESEM SHOT"
+shot_keine_quellen = "In diesem Shot ist noch nichts."
+knopf_umbenennen = "✎  Umbenennen"
+knopf_shot_loeschen = "Shot löschen"
+knopf_wirklich_loeschen = "Wirklich löschen?"
+knopf_quelle_entfernen = "Aus Shot entfernen"
+knopf_quelle_hinzufuegen = "+  Quelle hinzufügen"
+knopf_name_ok = "✓"
+knopf_name_weg = "✕"
+quelle_ausgewaehlt = "Ausgewählte Quelle: {name}"
+# Shot hinzufügen: 1. Zweck, 2. Layout
+shot_neu_schritt_zweck = "1. Wofür ist der Shot?"
+shot_neu_schritt_layout = "2. Wie soll es aussehen? (gelb = deine Kamera)"
+shot_neu_quelle_art = "Was soll in den Shot?"
+knopf_shot_anlegen = "Shot anlegen"
+knopf_quelle_anlegen = "Hinzufügen"
+shot_neu_bildschirm_hinweis = "Gleich fragt das System, welcher Bildschirm oder welches Fenster aufgenommen werden soll. Dort einmal auswählen und „Teilen“ klicken."
+shot_neu_bild_hinweis = "Gleich öffnet sich ein Fenster: Bild auswählen und „Öffnen“ klicken."
+shot_neu_laeuft = "Wird in OBS angelegt …"
+zweck_kamera = "Kamera"
+zweck_spiel = "Spiel"
+zweck_reactions = "Reactions"
+zweck_bildschirm = "Bildschirm"
+zweck_bild = "Bild"
+art_kamera = "Kamera"
+art_spiel = "Spiel"
+art_fenster = "Reactions-Video"
+art_bildschirm = "Bildschirm"
+art_bild = "Bild"
+# So heißen neue Quellen in OBS (Shots und Quellen dürfen in OBS nicht gleich heißen)
+quelle_name_kamera = "Kamerabild"
+quelle_name_spiel = "Spielaufnahme"
+quelle_name_fenster = "Reactions-Video"
+quelle_name_bildschirm = "Bildschirmaufnahme"
+quelle_name_bild = "Bilddatei"
+layout_voll = "Ganzes Bild"
+layout_kamera_rechts_unten = "Rechts unten"
+layout_kamera_links_unten = "Links unten"
+layout_kamera_rechts_oben = "Rechts oben"
+layout_nebeneinander = "Nebeneinander"
+bild_auswaehlen = "Bild auswählen"
+meldung_shot_angelegt = "Fertig! Der Shot „{name}“ ist da."
+meldung_shot_ohne_kamera = "Der Shot „{name}“ ist da – aber die Kamera ließ sich nicht einfügen."
+meldung_quelle_hinzugefuegt = "Fertig! Die Quelle ist im Shot."
+meldung_shot_geloescht = "Der Shot ist gelöscht."
+meldung_quelle_entfernt = "Die Quelle ist aus dem Shot entfernt."
+meldung_umbenannt = "Fertig! Neuer Name: {name}"
+meldung_name_leer = "Bitte einen Namen eintippen."
+meldung_name_vergeben = "Diesen Namen gibt es schon. Bitte einen anderen wählen."
+meldung_letzter_shot = "Der letzte Shot kann nicht gelöscht werden – OBS braucht mindestens einen."
+meldung_art_fehlt = "OBS kann auf diesem PC keine Quelle „{art}“ anlegen."
+meldung_obs_abgelehnt = "OBS hat das nicht angenommen. Bitte gleich noch einmal versuchen."
+meldung_kein_bild = "Kein Bild ausgewählt."
+gesperrt_shot_live = "Dieser Shot ist gerade live. Erst einen anderen Shot live schalten."
+gesperrt_shot_letzter = "Der letzte Shot kann nicht gelöscht werden – OBS braucht mindestens einen."
+gesperrt_shot_arbeitet = "OBS ist gerade beschäftigt – einen Moment."
+gesperrt_keine_quelle = "Zuerst unten eine Quelle anklicken."
+gesperrt_shot_obs = "Das geht erst, wenn OBS verbunden ist."
+gesperrt_zweck_fehlt = "Zuerst oben auswählen, wofür der Shot ist."
 
 # Beenden
 frage_beenden_live_titel = "Du bist live"

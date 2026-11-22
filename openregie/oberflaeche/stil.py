@@ -129,6 +129,13 @@ def stylesheet(E) -> str:
     QPushButton#einblenden:disabled, QPushButton#ausblenden:disabled, QPushButton#twitch:disabled {{
         background-color: {f.knopf_aus}; color: {f.knopf_aus_text}; border-color: {f.knopf_aus};
     }}
+    /* Auswahlknöpfe (z. B. Zweck und Layout beim Shot hinzufügen): ausgewählt = blauer Rahmen */
+    QPushButton#wahl {{ text-align: left; padding-left: 14px; }}
+    QPushButton#wahl:checked {{ background-color: {f.flaeche_hell}; border-color: {f.kachel_auswahl}; }}
+    QPushButton#wahl_bild {{ text-align: left; padding-left: 88px; }}
+    QPushButton#wahl:checked, QPushButton#wahl_bild:checked {{
+        background-color: {f.flaeche_hell}; border-color: {f.kachel_auswahl}; }}
+    QPushButton#wahl:checked:hover, QPushButton#wahl_bild:checked:hover {{ border-color: {f.knopf_hover_rahmen}; }}
     /* Countdown-Zeit: Häkchen (übernehmen) und Kreuz (abbrechen) neben dem Eingabefeld */
     QPushButton#zeit_ok, QPushButton#zeit_weg {{
         min-width: 0px; padding: 0px; font-size: {int(g.schrift_titel) + 14}px; font-weight: 800;

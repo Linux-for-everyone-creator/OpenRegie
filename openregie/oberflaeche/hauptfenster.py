@@ -10,6 +10,8 @@
   │ │Kach││Kach│ │                              │ Countdown / Texte      │
   │ └────┘└────┘ ├──────────────────────────────┤                        │
   │ LAMPEN ● ● ● │  Twitch-Streamtitel          │ [▶ Einblenden][■ Aus…] │
+  │              ├──────────────────────────────┤                        │
+  │              │ [✎][▾] [Shot][Shot][Shot][+] │                        │  Shots (wie Wirecast)
   └──────────────┴──────────────────────────────┴────────────────────────┘
    OpenRegie · Vorabversion · Build 1.1   ← Wasserzeichen unten links
 """
@@ -24,12 +26,14 @@ from PySide6.QtWidgets import (QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMai
 
 from .. import einstellungen
 from ..obs.motor import MotorZustand, ObsMotor
+from ..obs.quellen import ObsQuellen
 from ..obs.verbindung import ObsVerbindung, Sendung, Status
 from ..obs.vorschau import Vorschau
 from ..twitch.konto import TwitchKonto
 from ..uno.verwaltung import UnoVerwaltung
 from .bausteine import Logo, OnAirLicht, VerbindungsAnzeige, VorschauBild, beschriftung, flaeche, knopf
 from .overlay_bereich import Bibliothek, OverlayBedienfeld, UnoEinrichtung
+from .shot_bereich import ShotBedienfeld, ShotLeiste, ShotNeu
 from .stil import stylesheet
 from .twitch_bereich import TwitchBereich
 
@@ -40,8 +44,10 @@ STREAM_STOPP_WARTEN_MS = 15000
 
 class Hauptfenster(QMainWindow):
     def __init__(self, E, verbindung: ObsVerbindung, vorschau: Vorschau, motor: ObsMotor,
-                 uno: UnoVerwaltung, twitch: TwitchKonto):
+                 uno: UnoVerwaltung, twitch: TwitchKonto, quellen: ObsQuellen | None = None):
         super().__init__()
+        # Shots/Quellen: Teil der Motor-Schicht – das Fenster spricht nie direkt mit OBS
+        self.quellen = quellen or ObsQuellen(verbindung, E.texte, E.quellen, self)
         self.E = E
         self.verbindung = verbindung
         self.vorschau = vorschau
@@ -111,7 +117,7 @@ class Hauptfenster(QMainWindow):
         ml.addWidget(self.knopf_obs_starten)
         self.knopf_neu = knopf(t.knopf_verbinden)
         self.knopf_neu.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.knopf_neu.clicked.connect(self.verbindung.jetzt_neu_verbinden)
+        self.knopf_neu.clicked.connect(self.motor.neu_verbinden)
         ml.addWidget(self.knopf_neu)
 
         # --- Mitte: Bibliothek | Live-Bild + Twitch | Ausgewählt -------------
@@ -142,10 +148,18 @@ class Hauptfenster(QMainWindow):
 
         twitch_flaeche = flaeche()
         tl = QVBoxLayout(twitch_flaeche)
-        tl.setContentsMargins(rand, rand, rand, rand)
+        tl.setContentsMargins(rand, g.abstand - 2, rand, g.abstand - 2)  # flacher: Platz für die Shots
         self.twitch_bereich = TwitchBereich(E, twitch)
         tl.addWidget(self.twitch_bereich)
         spalte.addWidget(twitch_flaeche)
+
+        # Shots unten wie bei Wirecast: ein Klick schaltet live
+        shot_flaeche = flaeche()
+        sl = QVBoxLayout(shot_flaeche)
+        sl.setContentsMargins(g.abstand // 2 + 2, 5, g.abstand // 2 + 2, 5)
+        self.shot_leiste = ShotLeiste(E, self.quellen)
+        sl.addWidget(self.shot_leiste)
+        spalte.addWidget(shot_flaeche)
         reihe.addLayout(spalte, 1)
 
         rechts = flaeche()
@@ -157,6 +171,10 @@ class Hauptfenster(QMainWindow):
         self.overlay_bedienfeld = OverlayBedienfeld(E, uno)
         self.bedienfelder.addWidget(self.uno_einrichtung)
         self.bedienfelder.addWidget(self.overlay_bedienfeld)
+        self.shot_bedienfeld = ShotBedienfeld(E, self.quellen)
+        self.shot_neu = ShotNeu(E, self.quellen)
+        self.bedienfelder.addWidget(self.shot_bedienfeld)
+        self.bedienfelder.addWidget(self.shot_neu)
         rl.addWidget(self.bedienfelder)
         reihe.addWidget(rechts)
 
@@ -175,6 +193,12 @@ class Hauptfenster(QMainWindow):
         self.uno_einrichtung.zurueck_geklickt.connect(self._zurueck_zur_auswahl)
         # Wer selbst einfügt oder entfernt, bleibt auf der Seite und sieht die Meldung
         self.uno_einrichtung.einfuegen.clicked.connect(lambda: setattr(self, "_einrichtung_vom_nutzer", True))
+        self.shot_leiste.bearbeiten_geklickt.connect(self._shot_bearbeiten)
+        self.shot_leiste.hinzufuegen_geklickt.connect(self._shot_neu)
+        self.shot_leiste.bearbeiten_beendet.connect(self._shots_fertig)
+        self.shot_bedienfeld.fertig.connect(lambda: self.shot_leiste.bearbeiten_setzen(False))
+        self.shot_bedienfeld.quelle_hinzufuegen.connect(self._quelle_neu)
+        self.shot_neu.fertig.connect(self._shot_neu_fertig)
         uno.liste_geaendert.connect(self._liste_geaendert)
         uno.meldung.connect(lambda text, fehler: self.bibliothek.meldung.zeigen(text, False if fehler else None))
 
@@ -212,6 +236,47 @@ class Hauptfenster(QMainWindow):
         self.build.move(g.abstand + 4, mitte.height() - self.build.height() - 6)
         self.build.raise_()
 
+    def changeEvent(self, e):
+        super().changeEvent(e)
+        # Minimiert: keine Vorschaubilder für die Kacheln holen
+        if e.type() == e.Type.WindowStateChange:
+            self.shot_leiste.aktiv_pruefen()
+            self.shot_bedienfeld.aktiv_pruefen()
+
+    # --- Shots ----------------------------------------------------------------
+    def _shot_bearbeiten(self, name: str) -> None:
+        self.bibliothek.auswahl_aufheben()
+        self.shot_bedienfeld.zeigen(name)
+        self.bedienfelder.setCurrentWidget(self.shot_bedienfeld)
+
+    def _shot_neu(self) -> None:
+        self.bibliothek.auswahl_aufheben()
+        self.shot_leiste.gewaehlt_setzen(None)
+        self.shot_neu.shot_zeigen()
+        self.bedienfelder.setCurrentWidget(self.shot_neu)
+
+    def _quelle_neu(self, shot: str) -> None:
+        self.shot_neu.quelle_zeigen(shot)
+        self.bedienfelder.setCurrentWidget(self.shot_neu)
+
+    def _shot_neu_fertig(self, name: str) -> None:
+        if name and self.shot_neu.modus == "quelle":
+            self._shot_bearbeiten(name)
+        elif name:
+            # Neuen Shot gleich zum Bearbeiten zeigen (geht nicht live)
+            self.shot_leiste.bearbeiten_setzen(True)
+            self.shot_leiste.gewaehlt_setzen(name)
+            self._shot_bearbeiten(name)
+        elif self.shot_leiste.bearbeiten and self.shot_bedienfeld.shot_name:
+            self.bedienfelder.setCurrentWidget(self.shot_bedienfeld)
+        else:
+            self._shots_fertig()
+
+    def _shots_fertig(self) -> None:
+        """Bearbeiten beendet: rechts wieder das Overlay."""
+        if self.bedienfelder.currentWidget() in (self.shot_bedienfeld, self.shot_neu):
+            self._zurueck_zur_auswahl()
+
     # --- Overlays ---------------------------------------------------------
     def _overlay_zeigen(self, schluessel: str) -> None:
         overlay = self.uno.overlays.get(schluessel)
@@ -220,6 +285,7 @@ class Hauptfenster(QMainWindow):
             return
         self.overlay_bedienfeld.zeigen(overlay)
         self.bedienfelder.setCurrentWidget(self.overlay_bedienfeld)
+        self.shot_leiste.bearbeiten_setzen(False)  # erst jetzt: rechts steht schon das Overlay
 
     def _einrichtung_zeigen(self, vom_nutzer: bool = True) -> None:
         self._einrichtung_vom_nutzer = vom_nutzer
@@ -322,7 +388,7 @@ class Hauptfenster(QMainWindow):
             # Erst den Stream sauber beenden, dann schließen (spätestens nach 15 s)
             log.info("Beende Stream vor dem Schließen")
             self._stoppt_fuer_ende = True
-            self.verbindung.anfrage("StopStream")
+            self.motor.stream_beenden()
             self._stopp_uhr.start(STREAM_STOPP_WARTEN_MS)
             e.ignore()
             return
