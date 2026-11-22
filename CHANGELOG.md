@@ -55,6 +55,40 @@ Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 - Kopfleiste und Twitch-Bereich etwas flacher, damit die Shots auf Kevins Bildschirm (1903 × 971) ohne Rollen
   passen.
 
+**Behoben (beim Test mit dem echten OBS gefunden)**
+- Neue Quellen ließen sich bei manchen Typen nicht anlegen: OBS braucht den Typ mit Versionsnummer
+  (z. B. „color_source_v3“). OpenRegie fragt die Typen jetzt richtig ab. Das nachgeahmte Test-OBS verhält sich
+  jetzt genauso, damit so ein Fehler künftig auch ohne echtes OBS auffällt.
+- Bei der Logitech BRIO wurde die Infrarot-Kamera gewählt (leeres Bild) – OBS listet sie zuerst und unter
+  gleichem Namen. OpenRegie wählt jetzt die Kamera mit den meisten echten Bildformaten (bei der BRIO /dev/video0).
+- Unter Wayland kennt OBS 33 keine eigene Fensteraufnahme. Spiel und Reactions nutzen darum die
+  Bildschirmaufnahme – im Auswahlfenster des Systems lässt sich dort auch ein einzelnes Fenster wählen.
+
+**Gut zu wissen**
+- Die Kamera braucht nach dem Anlegen ein paar Sekunden für das erste Bild.
+- OBS lässt die Kamera weiterlaufen, auch wenn gerade ein Shot ohne Kamera live ist (OBS kann das unter Linux
+  nicht abschalten). Wird der letzte Shot mit Kamera gelöscht, gibt OpenRegie die Kamera ganz frei.
+- Vor dem Test startete OBS gar nicht (nach einem halben System-Update fehlte eine Datei). Behoben mit
+  `sudo pacman -Syu` – jetzt OBS 33.0.3.
+
+**Geprüft**
+- 258 automatische Tests, alle ohne Fehler. Die 59 neuen Tests für Shots und Wenn-dann zusätzlich
+  12-mal hintereinander, jedes Mal ohne Fehler.
+- Mit echtem OBS 33.0.3 (eigenes, unsichtbares Test-OBS, deine Einstellungen unberührt), 12 Läufe, jedes Mal
+  37 von 37: Shots lesen und 12× live schalten, Reactions-Shot mit echter BRIO-Kamera (klein rechts unten,
+  im Standbild zu sehen), Bild-Shot, 12× umbenennen, Löschen gibt Video und Kamera frei, Vorschaubilder
+  stoppen beim Anhalten, „Stream startet → Shot live“ und „Stream endet → Ton stumm“ mit echtem Stream.
+  Der Test aus Build 1.1 läuft weiter (26 von 26).
+- **Rechenlast** (Durchschnitt über 12 Läufe, je 10 Sekunden, Anteil eines Prozessorkerns):
+
+  | Zustand | OBS | OpenRegie | Anfragen an OBS |
+  |---|---|---|---|
+  | Leerlauf (Shot-Leiste zu, keine Regel) | ca. 0,7 % | 0,1–0,3 % | 0,2/s (nur On-Air-Prüfung) |
+  | Shot-Leiste offen (Vorschaubilder) | ca. 0,8 % | 0,1–0,3 % | 0,7–1,0/s |
+  | Regel aktiv | ca. 0,7 % | 0,1–0,3 % | 0,2/s (keine zusätzliche) |
+
+- Aussehen mit Standbildern geprüft (Kevins Fenstergröße 1903 × 971, passt ohne Rollen).
+
 ## Build 1.1.1 – Alles passt auf den Bildschirm · 16.11.2026
 
 **Behoben**

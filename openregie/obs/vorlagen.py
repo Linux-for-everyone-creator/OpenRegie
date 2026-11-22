@@ -9,6 +9,7 @@ Die Texte (Knopf-Beschriftung) stehen in einstellungen.toml unter [texte] (zweck
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 # Rollen im Layout
@@ -83,6 +84,17 @@ ZWECKE: dict[str, Zweck] = {z.schluessel: z for z in (
     Zweck("bildschirm", "💻", "bildschirm", True, ("kamera_rechts_unten", "kamera_links_unten", "voll")),
     Zweck("bild", "🖼", "bild", False, ("voll",)),
 )}
+
+
+def obs_art_waehlen(art: QuellenArt, vorhanden) -> str | None:
+    """Der erste OBS-Typ der Art, den OBS kennt – so, wie OBS ihn nennt (mit Versionsnummer,
+    z. B. „color_source“ → „color_source_v3“). Beim Anlegen braucht OBS genau diesen Namen."""
+    vorhanden = list(vorhanden)
+    for wunsch in art.obs_arten:
+        for k in vorhanden:
+            if k == wunsch or re.fullmatch(re.escape(wunsch) + r"_v\d+", k):
+                return k
+    return None
 
 
 def layout_rollen(layout: str) -> set[str]:

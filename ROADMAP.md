@@ -80,7 +80,8 @@ Vorbild für die Shots: Telestream Wirecast. Ab diesem Build streamt Kevin regul
 - [x] Automatik läuft nur mit mindestens einer aktiven Regel – sonst keine Pegelmessung, kein Takt, keine Abfrage
 - [x] Schutz vor Endlosschleifen (eine Regel löst höchstens alle 2 Sekunden aus)
 - [x] Zeitplan: Tage und Uhrzeiten mit großen Knöpfen eintragen; „Nächster Stream: Fr 19:00“ oben im Regiepult
-- [ ] Test mit echtem OBS (`werkzeuge/test_build_1_2_mit_echtem_obs.py`) – wartet auf das OBS-Update
+- [x] Test mit echtem OBS 33.0.3 (`werkzeuge/test_build_1_2_mit_echtem_obs.py`): 12 Läufe, je 37 von 37
+- [x] Rechenlast gemessen: Leerlauf, Shot-Leiste offen, Regel aktiv – jeweils unter 1 % eines Kerns
 
 ### Build 1.3
 - [ ] Lautstärke-Auslöser: Spricht Kevin (Pegel über Schwelle), schaltet OpenRegie auf die Kamera um;

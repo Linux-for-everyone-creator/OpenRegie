@@ -110,12 +110,18 @@ ok, d, _ = frag("GetVersion")
 print("      OBS", d.get("obsVersion"), "WebSocket", d.get("obsWebSocketVersion"))
 ok, d, _ = frag("GetInputKindList", {"unversioned": True})
 arten = set(d.get("inputKinds", []))
-for art in ("v4l2_input", "pipewire-screen-capture-source", "pipewire-window-capture-source", "image_source",
-            "browser_source"):
+ok, d, _ = frag("GetInputKindList", {"unversioned": False})
+arten_v = set(d.get("inputKinds", []))
+for art in ("v4l2_input", "pipewire-screen-capture-source", "image_source", "browser_source"):
     pruef(f"OBS kennt den Quellentyp „{art}“", art in arten)
+print("      Fensteraufnahme eigen:", "pipewire-window-capture-source" in arten,
+      "(sonst über die Bildschirmaufnahme – dort ist auch ein Fenster wählbar)")
+for z in ("spiel", "reactions", "bildschirm", "kamera", "bild"):
+    a_ = vorlagen.obs_art_waehlen(vorlagen.QUELLENARTEN[vorlagen.ZWECKE[z].haupt], arten_v)
+    pruef(f"Zweck „{z}“ hat einen passenden OBS-Typ", a_ is not None, str(a_))
 
 # Für den Test: eine Farbfläche statt Bildschirm/Fenster (würde sonst das System-Auswahlfenster öffnen)
-vorlagen.QUELLENARTEN["testfarbe"] = vorlagen.QuellenArt("testfarbe", ("color_source_v3",), "",
+vorlagen.QUELLENARTEN["testfarbe"] = vorlagen.QuellenArt("testfarbe", ("color_source",), "",
                                                         einstellungen={"color": 0xFF2B6F4A, "width": 1280,
                                                                        "height": 720})
 vorlagen.ZWECKE["testreactions"] = vorlagen.Zweck("testreactions", "", "testfarbe", not OHNE_KAMERA,
@@ -140,7 +146,7 @@ warte(1500)
 pruef("Niemand schaut hin → keine Abfrage der Shots", "GetSceneList" not in gezaehlt[vorher:], gezaehlt[vorher:])
 q.beobachten(ich)
 pruef("Shots werden gelesen", warte_bis(lambda: q.gelesen, 5000), str([s.name for s in q.shots]))
-pruef("Reihenfolge wie in OBS (oben zuerst)", [s.name for s in q.shots] == ["Pause", "Szene"],
+pruef("Reihenfolge wie in OBS (oben zuerst)", [s.name for s in q.shots] == ["Szene", "Pause"],
       str([s.name for s in q.shots]))
 for i in range(12):
     ziel = "Pause" if i % 2 == 0 else "Szene"
@@ -169,16 +175,37 @@ if not OHNE_KAMERA and "Kamerabild" in namen:
     pruef("Kamera klein rechts unten (OBS-Transform)",
           tr.get("positionX", 0) > 640 and tr.get("positionY", 0) > 360 and abs(tr.get("boundsWidth", 0) - 358.4) < 2,
           f"x={tr.get('positionX')} y={tr.get('positionY')} b={tr.get('boundsWidth')} h={tr.get('boundsHeight')}")
+    def standbild(datei):
+        ok, b, _ = frag("GetSourceScreenshot", {"sourceName": name, "imageFormat": "png", "imageWidth": 640})
+        bild = bild_aus_daten(b.get("imageData", ""))
+        if bild is None:
+            return None, None
+        bild.save(str(Path(S) / datei))
+        print("      Standbild:", Path(S) / datei)
+        return QColor(bild.pixel(160, 90)), QColor(bild.pixel(int(640 * 0.86), int(360 * 0.80)))
+
     warte(2500)  # Kamera braucht einen Moment
-    ok, b, _ = frag("GetSourceScreenshot", {"sourceName": name, "imageFormat": "png", "imageWidth": 640})
-    bild = bild_aus_daten(b.get("imageData", ""))
-    if bild is not None:
-        ecke = QColor(bild.pixel(int(640 * 0.86), int(360 * 0.80)))
-        mitte = QColor(bild.pixel(160, 90))
-        pruef("Standbild: großes Bild füllt die Fläche", abs(mitte.green() - 0x6F) < 25, mitte.name())
-        pruef("Standbild: in der Ecke ist etwas anderes (Kamera)", ecke.name() != mitte.name(), ecke.name())
-        bild.save(str(Path(S) / "reactions.png"))
-        print("      Standbild:", Path(S) / "reactions.png")
+    mitte, ecke = standbild("reactions_nicht_live.png")
+    pruef("Standbild: großes Bild füllt die Fläche", mitte is not None and abs(mitte.green() - 0x6F) < 25,
+          mitte.name() if mitte else "")
+    ausfuehren(q.live_schalten, name)
+    warte_bis(lambda: False, 5000)  # die Kamera braucht nach dem Start einige Sekunden für das erste Bild
+    mitte, ecke = standbild("reactions_live.png")
+    ok, akt, _ = frag("GetSourceActive", {"sourceName": "Kamerabild"})
+    ok, kb, f = frag("GetSourceScreenshot", {"sourceName": "Kamerabild", "imageFormat": "png", "imageWidth": 320})
+    kbild = bild_aus_daten(kb.get("imageData", "")) if ok else None
+    ok, liste, _ = frag("GetSceneItemList", {"sceneName": name})
+    ok, tr, _ = frag("GetSceneItemTransform", {"sceneName": name, "sceneItemId": kamera["sceneItemId"]})
+    print("      Kamera:", akt, "eigenes Bild:", kbild.size() if kbild else f,
+          [(e["sourceName"], e["sceneItemEnabled"], e["sceneItemIndex"]) for e in liste.get("sceneItems", [])],
+          {k: tr.get("sceneItemTransform", {}).get(k) for k in ("width", "height", "sourceWidth", "sourceHeight",
+                                                                "scaleX", "scaleY")})
+    pruef("Live: Kamera klein rechts unten zu sehen", ecke is not None and ecke != mitte, ecke.name() if ecke else "")
+    ausfuehren(q.live_schalten, "Szene")
+    warte(3000)
+    mitte2, ecke2 = standbild("reactions_danach_nicht_live.png")
+    print("      Nicht mehr live – Kamera im Vorschaubild noch zu sehen:",
+          ecke2 is not None and ecke2 != mitte2, ecke2.name() if ecke2 else "")
 
 # Bild-Shot
 png = Path(S) / "pause.png"

@@ -124,9 +124,10 @@ class ShotMotorTest(MotorGrundlage):
         self.assertTrue(ok, name)
         self.assertEqual(name, "Reactions")
         self.assertEqual(self.obs.reihenfolge("Reactions"), ["Reactions-Video", "Kamerabild"])  # Kamera oben
-        self.assertEqual(self.obs.quellen["Reactions-Video"]["kind"], "pipewire-window-capture-source")
+        # OBS 33 unter Wayland hat keine eigene Fensteraufnahme → Bildschirmaufnahme (dort ist Fenster wählbar)
+        self.assertEqual(self.obs.quellen["Reactions-Video"]["kind"], "pipewire-screen-capture-source")
         self.assertEqual(self.obs.quellen["Kamerabild"]["kind"], "v4l2_input")
-        self.assertEqual(self.obs.quellen["Kamerabild"]["settings"]["device_id"], "/dev/video0")
+        self.assertEqual(self.obs.quellen["Kamerabild"]["settings"]["device_id"], "/dev/video0")  # nicht die IR-Kamera
         ids = {n: k for k, n, _ in self.obs.szenen["Reactions"]}
         video, kamera = self.obs.transform[ids["Reactions-Video"]], self.obs.transform[ids["Kamerabild"]]
         # Bildfläche des falschen OBS: 1280 × 720. Video füllt alles, Kamera klein rechts unten
@@ -138,6 +139,12 @@ class ShotMotorTest(MotorGrundlage):
         self.assertLessEqual(kamera["positionX"] + kamera["boundsWidth"], 1280)
         self.assertLessEqual(kamera["positionY"] + kamera["boundsHeight"], 720)
         self.assertEqual(kamera["boundsType"], "OBS_BOUNDS_SCALE_INNER")
+
+    def test_kamera_nur_ein_geraet(self):
+        self.obs.geraete = [{"itemName": "Webcam", "itemValue": "/dev/video5", "itemEnabled": True}]
+        self.lesen()
+        self.ausfuehren(self.q.shot_anlegen, "kamera", "voll")
+        self.assertEqual(self.obs.quellen["Kamerabild"]["settings"]["device_id"], "/dev/video5")
 
     def test_jeder_zweck_und_jedes_layout(self):
         self.lesen()
@@ -221,6 +228,28 @@ class ShotMotorTest(MotorGrundlage):
         self.assertEqual(self.ausfuehren(self.q.shot_anlegen, "kamera", "voll"),
                          (False, self.E.texte.meldung_nicht_verbunden))
         self.assertEqual(self.q.shots, [])
+
+
+class VersionsnummerTest(MotorGrundlage):
+    """Gefunden mit echtem OBS 33: Anlegen geht nur mit Versionsnummer (color_source_v3)."""
+
+    def test_typ_mit_versionsnummer(self):
+        vorlagen.QUELLENARTEN["testfarbe"] = vorlagen.QuellenArt("testfarbe", ("color_source",), "")
+        try:
+            self.lesen()
+            self.E._werte["texte"]["quelle_name_testfarbe"] = "Farbe"
+            ok, text = self.ausfuehren(self.q.quelle_hinzufuegen, "Pause", "testfarbe")
+            self.assertTrue(ok, text)
+            self.assertEqual(self.obs.quellen["Farbe"]["kind"], "color_source_v3")
+        finally:
+            del vorlagen.QUELLENARTEN["testfarbe"]
+
+    def test_auswahl(self):
+        art = vorlagen.QuellenArt("x", ("gibtsnicht", "color_source", "image_source"), "")
+        self.assertEqual(vorlagen.obs_art_waehlen(art, ["image_source", "color_source_v3"]), "color_source_v3")
+        self.assertEqual(vorlagen.obs_art_waehlen(art, ["color_source_vx"]), None)
+        self.assertEqual(vorlagen.obs_art_waehlen(vorlagen.QUELLENARTEN["fenster"],
+                                                  ["pipewire-screen-capture-source"]), "pipewire-screen-capture-source")
 
 
 class StandbilderTest(MotorGrundlage):

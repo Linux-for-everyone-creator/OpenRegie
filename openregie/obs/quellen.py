@@ -404,7 +404,8 @@ class ObsQuellen(QObject):
 
     def _grundlagen(self):
         """Was OBS kann und wie groß das Bild ist."""
-        ok, d, fehler = yield ("GetInputKindList", {"unversioned": True})
+        # Mit Versionsnummer (z. B. „color_source_v3“): nur so nimmt OBS den Typ beim Anlegen an
+        ok, d, fehler = yield ("GetInputKindList", {"unversioned": False})
         if not ok:
             return None
         arten = set(d.get("inputKinds", []))
@@ -425,7 +426,7 @@ class ObsQuellen(QObject):
                           neu_angelegt: list):
         """Legt eine Quelle der Art an (oder nimmt die vorhandene Kamera). → sceneItemId oder Fehlermeldung."""
         art = vorlagen.QUELLENARTEN[art_name]
-        obs_art = next((a for a in art.obs_arten if a in arten), None)
+        obs_art = vorlagen.obs_art_waehlen(art, arten)
         if obs_art is None:
             return self.t.meldung_art_fehlt.format(art=self._art_text(art_name))
         if art.wiederverwenden:
@@ -448,16 +449,36 @@ class ObsQuellen(QObject):
         kennung = d.get("sceneItemId")
         log.info("Quelle „%s“ (%s) in „%s“ angelegt", name, obs_art, szene)
         if obs_art == "v4l2_input":
-            # Erste Kamera auswählen (OBS wählt über die Fernsteuerung keine von selbst)
-            ok, d, _ = yield ("GetInputPropertiesListPropertyItems", {"inputName": name, "propertyName": "device_id"})
-            geraete = [i for i in (d.get("propertyItems", []) if ok else []) if i.get("itemEnabled", True)
-                       and i.get("itemValue")]
-            if geraete:
-                yield ("SetInputSettings", {"inputName": name, "inputSettings": {"device_id": geraete[0]["itemValue"]}})
+            yield from self._kamera_waehlen(name)
         if kennung is None:
             ok, d, fehler = yield ("GetSceneItemId", {"sceneName": szene, "sourceName": name})
             return int(d.get("sceneItemId")) if ok else self._meldung(fehler)
         return int(kennung)
+
+    def _kamera_waehlen(self, name: str):
+        """Die richtige Kamera auswählen (OBS wählt über die Fernsteuerung keine von selbst).
+
+        Manche Kameras melden sich mehrfach unter gleichem Namen – die Logitech BRIO z. B. zusätzlich als
+        Infrarot-Kamera (Graustufen, steht in der Liste sogar zuerst). Die bietet nur nachgebildete
+        Bildformate („Emulated“). Gewählt wird darum das Gerät mit den meisten echten Bildformaten."""
+        ok, d, _ = yield ("GetInputPropertiesListPropertyItems", {"inputName": name, "propertyName": "device_id"})
+        geraete = [i["itemValue"] for i in (d.get("propertyItems", []) if ok else [])
+                   if i.get("itemEnabled", True) and i.get("itemValue")]
+        if not geraete:
+            return
+        beste, beste_zahl = geraete[0], -1
+        if len(geraete) > 1:
+            for geraet in geraete:
+                yield ("SetInputSettings", {"inputName": name, "inputSettings": {"device_id": geraet}})
+                ok, d, _ = yield ("GetInputPropertiesListPropertyItems", {"inputName": name,
+                                                                          "propertyName": "pixelformat"})
+                echte = sum(1 for i in (d.get("propertyItems", []) if ok else [])
+                            if "emulated" not in str(i.get("itemName", "")).lower())
+                log.info("Kamera %s: %d echte Bildformate", geraet, echte)
+                if echte > beste_zahl:
+                    beste, beste_zahl = geraet, echte
+        yield ("SetInputSettings", {"inputName": name, "inputSettings": {"device_id": beste}})
+        log.info("Kamera gewählt: %s", beste)
 
     def _rueckgaengig(self, szene: str | None, neu_angelegt: list):
         """Ging etwas schief: alles wieder weg, damit nichts halb Fertiges Leistung kostet."""
@@ -475,7 +496,7 @@ class ObsQuellen(QObject):
             return False, self.t.meldung_obs_abgelehnt
         arten, breite, hoehe, eingaenge, szenen = g
         haupt = vorlagen.QUELLENARTEN[zweck.haupt]
-        if not any(a in arten for a in haupt.obs_arten):
+        if vorlagen.obs_art_waehlen(haupt, arten) is None:
             return False, self.t.meldung_art_fehlt.format(art=self._art_text(zweck.haupt))
         shot = vorlagen.freier_name(getattr(self.t, f"zweck_{zweck_name}"), set(szenen) | set(eingaenge))
         ok, _, fehler = yield ("CreateScene", {"sceneName": shot})

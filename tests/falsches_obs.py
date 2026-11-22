@@ -50,9 +50,14 @@ class FalschesObs(QObject):
         self.szene = "Szene 1"
         self.szenen = {"Szene 1": [], "Pause": []}  # Szene -> Liste von (id, quellenname, an)
         self.quellen: dict[str, dict] = {}  # name -> {"kind":..., "settings":...}
-        self.arten = ["browser_source", "image_source", "color_source_v3", "v4l2_input",
-                      "pipewire-screen-capture-source", "pipewire-window-capture-source"]
-        self.geraete = [{"itemName": "Logitech BRIO", "itemValue": "/dev/video0", "itemEnabled": True}]
+        # wie das echte OBS 33 unter Wayland (Fensteraufnahme geht dort über die Bildschirmaufnahme)
+        self.arten = ["browser_source", "image_source", "color_source_v3", "v4l2_input", "slideshow_v2",
+                      "pipewire-screen-capture-source", "pulse_input_capture", "text_ft2_source_v2"]
+        # wie Kevins Logitech BRIO: zuerst die Infrarot-Kamera (nur nachgebildete Formate), dann die echte
+        self.geraete = [{"itemName": "Logitech BRIO", "itemValue": "/dev/video2", "itemEnabled": True},
+                        {"itemName": "Logitech BRIO", "itemValue": "/dev/video0", "itemEnabled": True}]
+        self.formate = {"/dev/video2": ["BGR3 (Emulated)", "YU12 (Emulated)"],
+                        "/dev/video0": ["YUYV 4:2:2", "Motion-JPEG", "BGR3 (Emulated)"]}
         self.naechste_id = 1
         self.transform: dict[int, dict] = {}
         self.bild = testbild_daten()
@@ -165,6 +170,10 @@ class FalschesObs(QObject):
         if typ == "GetInputPropertiesListPropertyItems":
             if d.get("inputName") not in self.quellen:
                 return (False, 600, "No source", None)
+            if d.get("propertyName") == "pixelformat":
+                geraet = self.quellen[d["inputName"]]["settings"].get("device_id")
+                return (*OK, {"propertyItems": [{"itemName": n, "itemValue": i, "itemEnabled": True}
+                                                for i, n in enumerate(self.formate.get(geraet, []))]})
             return (*OK, {"propertyItems": list(self.geraete) if d.get("propertyName") == "device_id" else []})
         if typ == "SetSceneItemIndex" and d.get("sceneName") not in self.szenen:
             return (False, 600, "No scene", None)
@@ -209,6 +218,9 @@ class FalschesObs(QObject):
             self.ereignis("SceneItemListReindexed", {"sceneName": d["sceneName"]})
             return (*OK, None)
         if typ == "GetInputKindList":
+            if d.get("unversioned"):  # wie OBS: ohne Versionsnummer, z. B. color_source statt color_source_v3
+                import re as _re
+                return (*OK, {"inputKinds": [_re.sub(r"_v\d+$", "", a) for a in self.arten]})
             return (*OK, {"inputKinds": list(self.arten)})
         if typ == "GetVideoSettings":
             return (*OK, {"baseWidth": 1280, "baseHeight": 720, "outputWidth": 1280, "outputHeight": 720})
@@ -218,6 +230,10 @@ class FalschesObs(QObject):
                 return (False, 600, "No source was found by the name of `x`.", None)
             return (*OK, {"inputKind": q["kind"], "inputSettings": q["settings"]})
         if typ == "CreateInput":
+            if d["inputKind"] not in self.arten:  # wie OBS: nur mit Versionsnummer, z. B. color_source_v3
+                return (False, 400, "Your specified input kind is not supported by OBS. Check that your "
+                                    "specified kind is properly versioned and that any necessary plugins are loaded.",
+                        None)
             if d["inputName"] in self.quellen:
                 return (False, 601, "A source already exists by that input name.", None)
             if d["sceneName"] not in self.szenen:
