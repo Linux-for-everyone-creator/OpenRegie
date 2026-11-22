@@ -1,10 +1,10 @@
 # OpenRegie – Profi-Regie für alle. Einfach live.
 
 > [!WARNING]
-> **Pre-Alpha (Build 1.1.1).** OpenRegie ist in früher Entwicklung. Funktionen ändern sich,
+> **Pre-Alpha (Build 1.2).** OpenRegie ist in früher Entwicklung. Funktionen ändern sich,
 > Fehler sind wahrscheinlich. Bitte noch **nicht** für wichtige Livestreams verwenden.
 >
-> **Pre-alpha (build 1.1.1).** OpenRegie is in early development. Features will change and
+> **Pre-alpha (build 1.2).** OpenRegie is in early development. Features will change and
 > bugs are likely. Please do **not** rely on it for important live streams yet.
 
 🇩🇪 [Deutsch](#deutsch) · 🇬🇧 [English](#english)
@@ -21,6 +21,9 @@ zum Beispiel mit Joystick, Maus oder nur der Tastatur.
 - **OBS** läuft unsichtbar als Motor im Hintergrund. OpenRegie steuert es über den OBS-WebSocket.
 - **Overlays.uno** liefert alle Grafiken: ein- und ausblenden, Texte ändern, Countdown steuern.
 - **Twitch**: Den Streamtitel direkt aus OpenRegie ändern.
+- **Shots** (wie bei Wirecast): alle Szenen als große Kacheln mit Vorschaubild, ein Klick schaltet live.
+  Neue Shots mit Zweck und Layout anlegen (z. B. Reactions: Video groß, Kamera klein) – ohne OBS zu öffnen.
+- **Wenn-dann**: einfache Regeln (z. B. „Wenn der Stream startet → dann Shot ‚Pause‘ live“) und ein Zeitplan.
 - Große Knöpfe, klare Farben, verständliche Meldungen ohne Fachsprache.
 - Alle Farben, Texte und Größen lassen sich in `einstellungen.toml` anpassen.
 
@@ -99,6 +102,9 @@ when using a joystick, a mouse or only the keyboard.
 - **OBS** runs invisibly in the background as the engine. OpenRegie controls it via OBS WebSocket.
 - **Overlays.uno** provides all graphics: show and hide overlays, edit texts, control countdowns.
 - **Twitch**: change your stream title right from OpenRegie.
+- **Shots** (like Wirecast): every scene as a big tile with a preview, one click puts it on air.
+  Create new shots by purpose and layout (e.g. reactions: video large, camera small) – without opening OBS.
+- **If-then**: simple rules (e.g. "when the stream starts → put shot 'Pause' on air") and a schedule.
 - Big buttons, clear colours, plain-language messages.
 - All colours, texts and sizes are configurable in `einstellungen.toml`.
 

@@ -53,22 +53,56 @@ OpenRegie wird Open Source: keine Geheimnisse im Code, Zugangsdaten nur im Passw
       gehen weiter. Mit dem echten Uno geprüft (20 von 20). *(16.11.2026)*
 - [ ] Twitch-App anlegen und Client-ID eintragen
 
-### Build 1.2
-- [ ] Quellen aus OBS als Kacheln (wie im Entwurf unten)
-- [ ] OBS-Quellen als Vorschaubilder anzeigen und umbenennen
-- [ ] Overlays direkt bearbeiten: über den Knopf „Bearbeiten“ (einfacher Klick) und zusätzlich per Doppelklick in der Vorschau
+### Build 1.2 – Shots & Wenn-dann · *fertig (22.11.2026)*
+Vorbild für die Shots: Telestream Wirecast. Ab diesem Build streamt Kevin regulär.
+
+**Teil A – Shots und Quellen**
+- [x] Alle Szenen aus OBS als große Kacheln mit kleinem Vorschaubild unten unter dem Live-Bild (wie Wirecast)
+- [x] Ein Klick auf einen Shot schaltet ihn sofort live (roter Rahmen = live)
+- [x] „✎“ (Bearbeiten): Klick öffnet den Shot rechts zum Bearbeiten, ohne ihn live zu schalten
+- [x] Quellen eines Shots als Kacheln mit Vorschaubild; Shots und Quellen umbenennen
+- [x] „+ Shot hinzufügen“: Zweck wählen (Kamera, Spiel, Reactions, Bildschirm, Bild), passendes Layout
+      kommt gleich mit (z. B. Reactions: Video groß, Kamera klein rechts unten) – Zweck und Layout sind Pflicht
+- [x] „+ Quelle hinzufügen“ in einen Shot (Kamera, Spiel, Bildschirm, Bild) – OBS muss nie geöffnet werden
+- [x] Es gibt nur eine Kamera-Quelle für alle Shots (eine Kamera lässt sich nur einmal öffnen)
+- [x] Löschen gibt alles in OBS frei: Quellen, die in keinem Shot mehr vorkommen, werden ganz entfernt
+- [x] Vorschaubilder nur, solange die Shot-Leiste (bzw. das Bearbeiten) zu sehen ist, alle 5 Sekunden,
+      immer nur ein Bild gleichzeitig; zugeklappt (▾) oder Fenster minimiert: keine einzige Anfrage
+- [x] Die Oberfläche spricht nur über die Motor-Schicht mit OBS (ein Test wacht darüber)
+
+**Teil B – Wenn-dann-Fenster**
+- [x] Knopf „⚡ Wenn-dann“ oben öffnet ein kleines Fenster: links „Wenn …“, rechts „… dann“
+- [x] Große Auswahllisten mit Gruppen (Stream, Szenen, Overlays, Ton, Zeitplan), ganz ohne Tippen
+- [x] Regeln anlegen, bearbeiten, an-/ausschalten, löschen; gespeichert in ~/.local/share/openregie/
+- [x] Register für Auslöser und Aktionen – neue (Build 1.3) lassen sich einfach eintragen
+- [x] Auslöser: Stream startet, Stream endet, Shot geht live, Startzeit laut Zeitplan
+- [x] Aktionen: Shot live schalten, Overlay ein-/ausblenden, Ton stumm/an
+- [x] Automatik läuft nur mit mindestens einer aktiven Regel – sonst keine Pegelmessung, kein Takt, keine Abfrage
+- [x] Schutz vor Endlosschleifen (eine Regel löst höchstens alle 2 Sekunden aus)
+- [x] Zeitplan: Tage und Uhrzeiten mit großen Knöpfen eintragen; „Nächster Stream: Fr 19:00“ oben im Regiepult
+- [ ] Test mit echtem OBS (`werkzeuge/test_build_1_2_mit_echtem_obs.py`) – wartet auf das OBS-Update
+
+### Build 1.3
+- [ ] Lautstärke-Auslöser: Spricht Kevin (Pegel über Schwelle), schaltet OpenRegie auf die Kamera um;
+      Schwellwert einstellbar. Pegelmessung nur, solange so eine Regel aktiv ist.
+- [ ] Spiel-Erkennung: Bei aktivem Spiel-Shot die Kamera klein einblenden statt umzuschalten
+- [ ] Performance-Test mit aktiver Lautstärke-Regel (Rechenlast vorher und nachher)
+- [ ] Kamera auswählen, wenn mehrere angeschlossen sind (jetzt: die erste)
+- [ ] Overlays direkt bearbeiten: über den Knopf „Bearbeiten“ (einfacher Klick) und zusätzlich per
+      Doppelklick in der Vorschau *(war für 1.2 geplant, verschoben)*
 
 ### Build 1.7
 - [ ] Ordner für Overlays (Bibliothek) und Suche
 - [ ] Twitch-Kategorie ändern
 
 ## Später
-- [ ] Quellen hinzufügen
-- [ ] Studio-Modus
+- [ ] Studio-Modus: Vorschau-Bild neben dem Live-Bild mit Knopf „Los“ (wie Wirecast)
 - [ ] Stream Dock
 
 ## Technik in Kürze
-- `openregie/obs/` – Verbindung, Vorschau und der „Motor“ (OBS unsichtbar starten/beenden)
+- `openregie/obs/` – die Motor-Schicht: Verbindung, Vorschau, OBS unsichtbar starten/beenden,
+  Shots und Quellen (`quellen.py`), Zwecke und Layouts (`vorlagen.py`)
+- `openregie/automatik/` – Wenn-dann-Regeln, Register der Auslöser/Aktionen, Zeitplan
 - `openregie/uno/` – Overlays.uno: Befehle an die API-Adresse eines Uno-Projekts
 - `openregie/twitch/` – Twitch-Anmeldung (Device Code Flow, nur öffentliche Client-ID) und Titel
 - `openregie/geheimspeicher.py` – Zugangsdaten im Passwortspeicher des Systems (`secret-tool`)

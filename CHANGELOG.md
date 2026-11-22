@@ -2,6 +2,59 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.2 – Shots & Wenn-dann · 22.11.2026
+
+**Neu: Shots (wie bei Wirecast)**
+- Unter dem Live-Bild stehen alle Szenen aus OBS als große Kacheln mit kleinem Vorschaubild.
+  **Ein Klick schaltet einen Shot sofort live** – der rote Rahmen zeigt, was gerade gesendet wird.
+- Passen nicht alle Kacheln nebeneinander, blättert man mit ◀ ▶ (am Ende geht es vorne weiter).
+- **✎ (Bearbeiten):** Danach öffnet ein Klick auf einen Shot rechts unter „AUSGEWÄHLT“ das Bearbeiten,
+  statt ihn live zu schalten (gelb gestrichelter Rahmen). Dort:
+  - Shot umbenennen, Shot löschen (mit „Wirklich löschen?“). Der Shot, der gerade live ist, und der
+    letzte Shot lassen sich nicht löschen – der Knopf sagt warum.
+  - Die Quellen im Shot als Kacheln mit Vorschaubild: anklicken, dann umbenennen oder aus dem Shot
+    entfernen. „+ Quelle hinzufügen“: Kamera, Spiel, Bildschirm oder Bild.
+  - „✓ Fertig“ (oder ✓ in der Leiste) beendet das Bearbeiten.
+- **„+ Shot hinzufügen“** (letzte Kachel): 1. Zweck wählen – Kamera, Spiel, Reactions, Bildschirm, Bild.
+  2. Das passende Layout ist gleich ausgewählt, z. B. Reactions: Video groß, deine Kamera klein rechts unten.
+  Andere Layouts (links unten, rechts oben, nebeneinander, ganzes Bild) per Klick. Kleine Bildchen zeigen,
+  wo die Kamera sitzt (gelb). OpenRegie legt alles im Hintergrund in OBS an – **OBS muss nie geöffnet werden.**
+  - Bei Bildschirm, Spiel und Reactions fragt das System (KDE) einmal, welcher Bildschirm bzw. welches
+    Fenster aufgenommen werden soll. Bei „Bild“ öffnet sich ein Fenster zum Auswählen der Datei.
+  - Es gibt nur **eine** Kamera-Quelle für alle Shots (eine Kamera lässt sich nur einmal öffnen).
+  - Geht beim Anlegen etwas schief, räumt OpenRegie den halben Shot wieder weg.
+- Neue Quellen heißen in OBS „Kamerabild“, „Spielaufnahme“, „Reactions-Video“, „Bildschirmaufnahme“ bzw.
+  „Bilddatei“ (in OBS dürfen Shot und Quelle nicht gleich heißen).
+- Uno-Overlays erscheinen nicht bei den Quellen – die stehen wie bisher links in der Bibliothek.
+
+**Neu: Wenn-dann-Fenster (Automatik)**
+- Knopf **„⚡ Wenn-dann“** oben. Er zeigt auch, wie viele Regeln an sind („⚡ Wenn-dann · 2 an“).
+- Links „Wenn …“, rechts „… dann“: große Auswahllisten mit Gruppen (Stream, Szenen, Overlays, Ton,
+  Zeitplan). Braucht die Auswahl noch etwas (z. B. welcher Shot), erscheint darunter eine zweite Liste.
+  Kein Tippen nötig.
+- Auslöser: Stream startet · Stream endet · dieser Shot geht live · Startzeit im Zeitplan erreicht.
+- Aktionen: Shot live schalten · Overlay einblenden/ausblenden · Ton stumm/wieder an.
+- Regeln an- und ausschalten (● An / ○ Aus), bearbeiten, löschen. Gespeichert in
+  `~/.local/share/openregie/automatik.json` (nur für den eigenen Benutzer lesbar).
+- Schutz vor Endlosschleifen: Eine Regel löst höchstens alle 2 Sekunden aus.
+- **Zeitplan** (zweiter Reiter): Tag anklicken, Uhrzeit mit −1 Std / −15 Min / +15 Min / +1 Std einstellen,
+  „+ Termin eintragen“. Oben im Regiepult steht dann z. B. „Nächster Stream: Fr 19:00“.
+
+**Sparsam mit Leistung**
+- Vorschaubilder der Kacheln nur, solange die Shot-Leiste bzw. das Bearbeiten zu sehen ist: alle 5 Sekunden,
+  kleines Bild (320 Pixel), immer nur eines gleichzeitig. **Zugeklappt (▾) oder minimiert: keine einzige Anfrage.**
+- Die Liste der Shots wird nur nach einer Änderung in OBS neu gelesen – und nur, wenn jemand hinschaut.
+- Die Automatik läuft nur, wenn mindestens eine Regel an ist. Ohne aktive Regel: keine Pegelmessung,
+  kein Takt, keine Abfrage. Die Auslöser in 1.2 kosten gar nichts (OBS meldet sie ohnehin); der Zeitplan
+  stellt nur einen Wecker auf den nächsten Termin.
+- Das Wenn-dann-Fenster tut nichts, solange es zu ist.
+
+**Geändert**
+- Die Oberfläche spricht nur noch über die Motor-Schicht mit OBS (auch „Neu verbinden“ und „Stream beenden“
+  beim Schließen). Ein Test liest den Programmtext und schlägt Alarm, wenn sich das ändert.
+- Kopfleiste und Twitch-Bereich etwas flacher, damit die Shots auf Kevins Bildschirm (1903 × 971) ohne Rollen
+  passen.
+
 ## Build 1.1.1 – Alles passt auf den Bildschirm · 16.11.2026
 
 **Behoben**
