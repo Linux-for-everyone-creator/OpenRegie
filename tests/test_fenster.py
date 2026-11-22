@@ -859,7 +859,7 @@ class GesperrteKnoepfeTest(Grundlage):
         """Liest den Programmtext: Jeder Knopf, der irgendwo gesperrt wird, muss einen Hinweis haben."""
         ordner = Path(overlay_bereich.__file__).parent
         besitzer = [self.b, self.f.uno_einrichtung, self.f.twitch_bereich, self.f.bibliothek, self.f,
-                    self.f.shot_bedienfeld, self.f.shot_neu, self.f.shot_leiste]
+                    self.f.shot_bedienfeld, self.f.shot_neu, self.f.shot_leiste, self.f.wenn_dann]
         namen, gruppen = set(), set()
         for datei in sorted(ordner.glob("*.py")):
             text = datei.read_text()

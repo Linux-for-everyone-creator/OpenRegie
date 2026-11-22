@@ -39,6 +39,8 @@ _AENDERUNGEN = {
     "CurrentSceneCollectionChanged",
 }
 CODE_NAME_VERGEBEN = 601
+# Quellentypen mit Ton (Linux: PulseAudio/PipeWire, ALSA, JACK; Windows/Mac der Vollständigkeit halber)
+_TON_ARTEN = ("pulse_", "alsa_", "jack_", "audio", "wasapi", "coreaudio", "pipewire-audio")
 
 Fertig = Callable[[bool, str], None]  # (erfolgreich, Meldung für Menschen bzw. neuer Name)
 
@@ -284,6 +286,30 @@ class ObsQuellen(QObject):
         if "already exists" in (fehler or ""):
             return self.t.meldung_name_vergeben
         return self.t.meldung_obs_abgelehnt
+
+    # --- Für die Automatik (Wenn-dann) --------------------------------------
+    def shot_namen(self, fertig: Callable[[list[str]], None]) -> None:
+        """Namen aller Shots, einmal gefragt (z. B. für die Auswahlliste im Wenn-dann-Fenster)."""
+        def antwort(ok, d, _f):
+            szenen = sorted(d.get("scenes", []), key=lambda s: -int(s.get("sceneIndex", 0))) if ok else []
+            fertig([s.get("sceneName") for s in szenen if s.get("sceneName")])
+        self.v.anfrage("GetSceneList", None, antwort)
+
+    def tonquellen(self, fertig: Callable[[list[str]], None]) -> None:
+        """Namen der Quellen mit Ton (Mikrofon, Desktop-Ton …), einmal gefragt."""
+        def antwort(ok, d, _f):
+            namen = [e.get("inputName") for e in (d.get("inputs", []) if ok else [])
+                     if e.get("inputName") and any(w in str(e.get("inputKind", "")) for w in _TON_ARTEN)]
+            fertig(namen)
+        self.v.anfrage("GetInputList", None, antwort)
+
+    def ton_stumm(self, name: str, stumm: bool, fertig: Fertig | None = None) -> None:
+        def antwort(ok, _d, f):
+            if not ok:
+                log.warning("Ton „%s“ nicht %s: %s", name, "stumm geschaltet" if stumm else "angeschaltet", f)
+            if fertig:
+                fertig(ok, "" if ok else self._meldung(f))
+        self.v.anfrage("SetInputMute", {"inputName": name, "inputMuted": stumm}, antwort)
 
     # --- Löschen (gibt Ressourcen frei) ----------------------------------
     def shot_loeschen(self, name: str, fertig: Fertig) -> None:

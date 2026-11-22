@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMai
 
 from .. import einstellungen
 from ..obs.motor import MotorZustand, ObsMotor
+from ..automatik.motor import Automatik
 from ..obs.quellen import ObsQuellen
 from ..obs.verbindung import ObsVerbindung, Sendung, Status
 from ..obs.vorschau import Vorschau
@@ -36,6 +37,7 @@ from .overlay_bereich import Bibliothek, OverlayBedienfeld, UnoEinrichtung
 from .shot_bereich import ShotBedienfeld, ShotLeiste, ShotNeu
 from .stil import stylesheet
 from .twitch_bereich import TwitchBereich
+from .wenn_dann import WennDannFenster, WennDannKnopf, naechster_text
 
 log = logging.getLogger("openregie.fenster")
 
@@ -44,10 +46,12 @@ STREAM_STOPP_WARTEN_MS = 15000
 
 class Hauptfenster(QMainWindow):
     def __init__(self, E, verbindung: ObsVerbindung, vorschau: Vorschau, motor: ObsMotor,
-                 uno: UnoVerwaltung, twitch: TwitchKonto, quellen: ObsQuellen | None = None):
+                 uno: UnoVerwaltung, twitch: TwitchKonto, quellen: ObsQuellen | None = None,
+                 automatik: Automatik | None = None):
         super().__init__()
-        # Shots/Quellen: Teil der Motor-Schicht – das Fenster spricht nie direkt mit OBS
+        # Shots/Quellen und Automatik: Motor-Schicht – das Fenster spricht nie direkt mit OBS
         self.quellen = quellen or ObsQuellen(verbindung, E.texte, E.quellen, self)
+        self.automatik = automatik or Automatik(E.texte, verbindung, self.quellen, uno, self)
         self.E = E
         self.verbindung = verbindung
         self.vorschau = vorschau
@@ -76,7 +80,7 @@ class Hauptfenster(QMainWindow):
         # --- Kopfleiste ---------------------------------------------------
         kopf = flaeche("kopfleiste")
         kl = QHBoxLayout(kopf)
-        kl.setContentsMargins(g.abstand * 2, g.abstand, g.abstand * 2, g.abstand)
+        kl.setContentsMargins(g.abstand * 2, 8, g.abstand * 2, 8)
         kl.setSpacing(g.abstand)
         kl.addWidget(Logo(E))
         name = QVBoxLayout()
@@ -88,6 +92,15 @@ class Hauptfenster(QMainWindow):
         self.verbindungsanzeige = VerbindungsAnzeige(E)
         kl.addWidget(self.verbindungsanzeige)
         kl.addStretch(1)
+        # Wenn-dann (Automatik) und der nächste Termin aus dem Zeitplan
+        self.naechster_stream = beschriftung("", "gedimmt")
+        kl.addWidget(self.naechster_stream)
+        self.knopf_wenn_dann = knopf(t.knopf_wenn_dann)
+        self.knopf_wenn_dann.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.knopf_wenn_dann.setMinimumWidth(260)
+        self.knopf_wenn_dann.clicked.connect(self.wenn_dann_oeffnen)
+        kl.addWidget(self.knopf_wenn_dann)
+        kl.addSpacing(g.abstand)
         self.on_air = OnAirLicht(E)
         kl.addWidget(self.on_air)
         kl.addSpacing(g.abstand)
@@ -209,6 +222,10 @@ class Hauptfenster(QMainWindow):
         motor.zustand_geaendert.connect(lambda *_: self._meldungsleiste_auffrischen())
         motor.sammlung_meldung.connect(self._sammlung)
 
+        self.wenn_dann = WennDannFenster(E, self.automatik, self)  # bleibt zu, bis man es öffnet (kostet nichts)
+        self.automatik.geaendert.connect(self._automatik_zeigen)
+        self._automatik_zeigen()
+
         self._stopp_uhr = QTimer(self)
         self._stopp_uhr.setSingleShot(True)
         self._stopp_uhr.timeout.connect(self._endgueltig_schliessen)
@@ -226,7 +243,22 @@ class Hauptfenster(QMainWindow):
 
     # ------------------------------------------------------------------
     def _uhr_stellen(self) -> None:
-        self.uhr.setText(QTime.currentTime().toString("HH:mm:ss"))
+        jetzt = QTime.currentTime()
+        self.uhr.setText(jetzt.toString("HH:mm:ss"))
+        if jetzt.minute() != getattr(self, "_minute", None):  # „Nächster Stream“ einmal pro Minute
+            self._minute = jetzt.minute()
+            if hasattr(self, "automatik"):
+                self.naechster_stream.setText(naechster_text(self.E, self.automatik))
+
+    # --- Wenn-dann ----------------------------------------------------------
+    def wenn_dann_oeffnen(self) -> None:
+        self.wenn_dann.show()
+        self.wenn_dann.raise_()
+        self.wenn_dann.activateWindow()
+
+    def _automatik_zeigen(self) -> None:
+        self.knopf_wenn_dann.setText(WennDannKnopf.text(self.E, self.automatik))
+        self.naechster_stream.setText(naechster_text(self.E, self.automatik))
 
     def resizeEvent(self, e):
         super().resizeEvent(e)

@@ -91,6 +91,7 @@ def main() -> int:
     from .obs.motor import MotorZustand, ObsMotor
     from .obs.overlays_in_obs import ObsOverlays
     from .obs.quellen import ObsQuellen
+    from .automatik.motor import Automatik
     from .obs.verbindung import ObsVerbindung
     from .obs.vorschau import Vorschau
     from .oberflaeche.hauptfenster import Hauptfenster
@@ -112,13 +113,15 @@ def main() -> int:
         twitch = TwitchKonto(E.twitch, E.texte, speicher)
         obs_overlays = ObsOverlays(E.obs, verbindung, uno)  # Uno-Quellen in OBS anlegen und oben halten
         quellen = ObsQuellen(verbindung, E.texte, E.quellen, uno_namen=lambda: obs_overlays.uno_namen)
-        fenster = Hauptfenster(E, verbindung, vorschau, motor, uno, twitch, quellen)
+        automatik = Automatik(E.texte, verbindung, quellen, uno)  # läuft nur mit aktiver Regel
+        fenster = Hauptfenster(E, verbindung, vorschau, motor, uno, twitch, quellen, automatik)
     except EinstellungsFehler as fehler:
         hinweis("OpenRegie", str(fehler))
         return 1
 
     def aufraeumen():
         vorschau.anhalten()
+        automatik.beenden()
         uno.beenden()
         twitch.beenden()
         verbindung.beenden()
@@ -165,5 +168,6 @@ def main() -> int:
 
     uno.laden()
     twitch.laden()
+    automatik.laden()
     motor.starten()
     return app.exec()

@@ -129,6 +129,24 @@ def stylesheet(E) -> str:
     QPushButton#einblenden:disabled, QPushButton#ausblenden:disabled, QPushButton#twitch:disabled {{
         background-color: {f.knopf_aus}; color: {f.knopf_aus_text}; border-color: {f.knopf_aus};
     }}
+    /* Große Auswahllisten (Wenn-dann): groß, mit breiter Scrollfläche */
+    QComboBox {{
+        background-color: {f.knopf}; color: {f.knopf_text};
+        border: {g.rahmen_dick}px solid {f.rahmen}; border-radius: {g.knopf_rundung}px;
+        min-height: {g.knopf_hoehe - 2 * g.rahmen_dick}px; padding: 0px 16px; font-weight: 700;
+    }}
+    QComboBox:hover {{ border-color: {f.knopf_hover_rahmen}; background-color: {f.knopf_hover}; }}
+    QComboBox:focus {{ border-color: {f.knopf_fokus_rahmen}; }}
+    QComboBox::drop-down {{ width: 48px; border: none; }}
+    QListView#grosse_liste {{
+        background-color: {f.flaeche}; color: {f.text}; border: 2px solid {f.knopf_hover_rahmen};
+        font-size: {g.schrift}px; outline: none;
+    }}
+    QListView#grosse_liste::item {{ min-height: 56px; padding: 0px 8px; }}
+    QListView#grosse_liste::item:hover {{ background-color: {f.knopf_hover}; }}
+    QListView#grosse_liste::item:selected {{ background-color: {f.auswahl}; }}
+    QDialog {{ background-color: {f.hintergrund}; }}
+
     /* Auswahlknöpfe (z. B. Zweck und Layout beim Shot hinzufügen): ausgewählt = blauer Rahmen */
     QPushButton#wahl {{ text-align: left; padding-left: 14px; }}
     QPushButton#wahl:checked {{ background-color: {f.flaeche_hell}; border-color: {f.kachel_auswahl}; }}
