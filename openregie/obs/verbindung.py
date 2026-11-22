@@ -92,6 +92,7 @@ class ObsVerbindung(QObject):
         self.meldung = ""
         self.sendung = Sendung.AUS
         self.szene = ""
+        self.szene_kennung = ""  # eindeutige OBS-Kennung (UUID) der gesendeten Szene – bleibt beim Umbenennen gleich
 
         self._socket: QWebSocket | None = None
         self._passwort = ""
@@ -279,7 +280,13 @@ class ObsVerbindung(QObject):
         if typ == "StreamStateChanged":
             self._sendung_aus_obs(daten.get("outputActive"), daten.get("outputState"))
         elif typ == "CurrentProgramSceneChanged":
-            self._szene_setzen(daten.get("sceneName", ""))
+            self._szene_setzen(daten.get("sceneName", ""), daten.get("sceneUuid", ""))
+        elif typ == "SceneNameChanged":
+            # Die gesendete Szene wurde umbenannt: sofort den neuen Namen übernehmen (nicht erst nach Fehlern)
+            gleiche = (daten.get("sceneUuid") and daten.get("sceneUuid") == self.szene_kennung) \
+                or (daten.get("oldSceneName") and daten.get("oldSceneName") == self.szene)
+            if gleiche:
+                self._szene_setzen(daten.get("sceneName", ""), daten.get("sceneUuid") or self.szene_kennung)
         elif typ == "ExitStarted":
             log.info("OBS wird beendet")
         self.ereignis.emit(typ, daten)
@@ -334,7 +341,8 @@ class ObsVerbindung(QObject):
 
     def _szene_antwort(self, ok, daten, _fehler) -> None:
         if ok:
-            self._szene_setzen(daten.get("sceneName") or daten.get("currentProgramSceneName") or "")
+            self._szene_setzen(daten.get("sceneName") or daten.get("currentProgramSceneName") or "",
+                               daten.get("sceneUuid") or daten.get("currentProgramSceneUuid") or "")
 
     def szene_neu_abfragen(self) -> None:
         self.anfrage("GetCurrentProgramScene", rueckruf=self._szene_antwort)
@@ -354,7 +362,8 @@ class ObsVerbindung(QObject):
             log.info("Sendung: %s", sendung.value)
             self.sendung_geaendert.emit(sendung)
 
-    def _szene_setzen(self, name: str) -> None:
+    def _szene_setzen(self, name: str, kennung: str = "") -> None:
+        self.szene_kennung = kennung if name else ""
         if name != self.szene:
             self.szene = name
             self.szene_geaendert.emit(name)

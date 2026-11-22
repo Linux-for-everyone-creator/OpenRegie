@@ -2,7 +2,44 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
-## Build 1.2 – Shots & Wenn-dann · 22.11.2026
+## Build 1.2.1 – kleines Update: jede Kachel gehört fest zu ihrer Szene · 22.11.2026
+
+**Fehlerbericht:** Zwei Szenen „Countdown“ und „Bildschirmaufnahme“ – nach dem Klick auf die
+Bildschirmaufnahme war im Live-Bild nur der Countdown zu sehen.
+
+**Was wirklich los war:** Die Kachel hat die richtige Szene geschaltet (nachgestellt mit echtem OBS).
+Aber die Bildschirmaufnahme lieferte kein Bild – der Bildschirm war im Auswahlfenster des Systems nicht
+(mehr) freigegeben. Und das Uno-Overlay „Countdown“ liegt automatisch in jeder Szene ganz oben.
+Übrig blieb ein schwarzes Bild mit dem Countdown darauf – es sah aus wie die falsche Szene.
+
+**Behoben / neu**
+- Jede Kachel ist jetzt fest mit der **eindeutigen OBS-Kennung** ihrer Szene verknüpft (nicht mit dem
+  Namen allein und nie mit der Position in der Liste). Auch Vorschaubilder und das große Live-Bild
+  fragen über diese Kennung.
+- Das stimmt auch nach **Umbenennen** (in OpenRegie oder in OBS), **Neuanlegen**, **Umsortieren** in OBS
+  und sogar, wenn zwei Szenen ihre Namen tauschen. Die Kachel bleibt dieselbe, mit ihrem Bild.
+- Wird die Szene umbenannt, die gerade live ist, zeigt OpenRegie den neuen Namen **sofort**
+  (vorher erst nach ein paar Sekunden mit Fehlversuchen).
+- Wenn-dann-Regeln ziehen den neuen Namen eines umbenannten Shots mit.
+- **„⚠ Kein Bild“** auf der Kachel, wenn eine Aufnahme (Bildschirm, Fenster, Spiel, Kamera) nichts liefert.
+  Der Hinweis verschwindet von selbst, sobald wieder ein Bild kommt.
+- Beim Bearbeiten (✎) einer Bildschirmaufnahme ohne Bild: Knopf **„Bildschirm neu auswählen“** – öffnet das
+  Auswahlfenster des Systems noch einmal.
+- Zusätzliche Bildabfragen gibt es nur für Aufnahmen ohne Bild und nur, solange die Leiste zu sehen ist.
+
+**Geprüft**
+- Neue Unit-Tests (`tests/test_zuordnung.py`): Kevins Fall, 5 Szenen, Umbenennen, Neuanlegen, Umsortieren,
+  Namen tauschen, Live-Szene umbenennen, gelöschte Szene, altes OBS ohne Kennung, Regeln – jede Prüfung
+  12 Runden; mit den Shot- und OBS-Tests 12 Läufe hintereinander, je 86 von 86. Alle 272 Tests: OK.
+- Echtes OBS 33.0.3 (`werkzeuge/test_zuordnung_mit_echtem_obs.py`, 5 Szenen in 5 Farben): 12 Läufe,
+  je 20 von 20. Umsortieren mit der Maus lässt sich über die OBS-Schnittstelle nicht auslösen – das
+  prüfen die Unit-Tests.
+- Prüfwerkzeug von Build 1.2 mit echtem OBS: weiter 37 von 37.
+
+**Gut zu wissen**
+- Das Uno-Overlay liegt weiter in jedem Shot. Einstellbar, in welchen Shots es liegt, wird es in Build 1.3.
+- Bitte einen frischen Screenshot fürs README machen.
+
 
 **Neu: Shots (wie bei Wirecast)**
 - Unter dem Live-Bild stehen alle Szenen aus OBS als große Kacheln mit kleinem Vorschaubild.

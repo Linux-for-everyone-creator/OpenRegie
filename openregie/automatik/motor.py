@@ -104,6 +104,10 @@ class Automatik(QObject):
         # Was Auslöser benutzen dürfen (Signale, die OBS ohnehin schickt)
         self.sendung_geaendert = verbindung.sendung_geaendert
         self.szene_geaendert = verbindung.szene_geaendert
+        # Shot in OBS umbenannt → Regeln, die diesen Shot meinen, ziehen den neuen Namen mit
+        umbenannt = getattr(quellen, "shot_umbenannt", None)
+        if umbenannt is not None:
+            umbenannt.connect(self._shot_umbenannt)
 
     # ------------------------------------------------------------------
     @property
@@ -176,6 +180,18 @@ class Automatik(QObject):
         self._speichern()
         self._neu_einrichten()
         self.geaendert.emit()
+
+    def _shot_umbenannt(self, alt: str, neu: str) -> None:
+        geaendert = False
+        for r in self.regeln:
+            a, b = register.AUSLOESER.get(r.wenn), register.AKTIONEN.get(r.dann)
+            if a is not None and a.wahl == register.SHOT and r.wenn_wert == alt:
+                r.wenn_wert, geaendert = neu, True
+            if b is not None and b.wahl == register.SHOT and r.dann_wert == alt:
+                r.dann_wert, geaendert = neu, True
+        if geaendert:
+            log.info("Shot „%s“ heißt jetzt „%s“ – Regeln angepasst", alt, neu)
+            self._geaendert()
 
     def naechster_termin(self, jetzt: datetime | None = None) -> datetime | None:
         return naechster(self.zeitplan, jetzt)

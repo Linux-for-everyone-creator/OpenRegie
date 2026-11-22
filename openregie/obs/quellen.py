@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -42,7 +43,28 @@ CODE_NAME_VERGEBEN = 601
 # Quellentypen mit Ton (Linux: PulseAudio/PipeWire, ALSA, JACK; Windows/Mac der Vollständigkeit halber)
 _TON_ARTEN = ("pulse_", "alsa_", "jack_", "audio", "wasapi", "coreaudio", "pipewire-audio")
 
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def ist_kennung(text: str) -> bool:
+    """Ist das eine feste OBS-Kennung (UUID) und kein Name?"""
+    return bool(_UUID.match(text or ""))
+
+
 Fertig = Callable[[bool, str], None]  # (erfolgreich, Meldung für Menschen bzw. neuer Name)
+
+
+# Quellentypen, die ein Bild liefern sollten (Aufnahme von Bildschirm, Fenster, Spiel, Kamera).
+# Liefert so eine Quelle 0 × 0 Pixel, ist sie „ohne Bild“ – z. B. Bildschirm im System-Fenster nicht freigegeben.
+_AUFNAHME_ARTEN = ("pipewire-screen-capture-source", "pipewire-window-capture-source", "xshm_input",
+                   "xcomposite_input", "vkcapture-source", "v4l2_input", "pipewire-camera-source")
+# Diese Aufnahmen haben in OBS den Knopf „Neu auswählen“ (öffnet das Auswahlfenster des Systems wieder)
+NEU_AUSWAEHLEN = {"pipewire-screen-capture-source": "Reselect", "pipewire-window-capture-source": "Reselect"}
+
+
+def _grundart(art: str) -> str:
+    """„color_source_v3“ → „color_source“ (OBS hängt manchmal eine Versionsnummer an)."""
+    return re.sub(r"_v\d+$", "", art or "")
 
 
 @dataclass
@@ -53,16 +75,45 @@ class Quelle:
     an: bool = True
     ist_uno: bool = False
     ist_szene: bool = False  # eine Szene in der Szene (Gruppe/verschachtelt) – wird nicht gelöscht
+    uuid: str = ""  # eindeutige OBS-Kennung der Quelle – bleibt beim Umbenennen gleich
+    breite: int = -1  # Bildbreite laut OBS (-1 = unbekannt)
+
+    @property
+    def schluessel(self) -> str:
+        """Woran OpenRegie die Quelle erkennt: die feste OBS-Kennung, sonst der Name."""
+        return self.uuid or self.name
+
+    @property
+    def ist_aufnahme(self) -> bool:
+        return _grundart(self.art) in _AUFNAHME_ARTEN
+
+    @property
+    def ohne_bild(self) -> bool:
+        return self.an and self.ist_aufnahme and self.breite == 0
+
+    @property
+    def neu_auswaehlen(self) -> str | None:
+        return NEU_AUSWAEHLEN.get(_grundart(self.art))
 
 
 @dataclass
 class Shot:
     name: str
     quellen: list[Quelle] = field(default_factory=list)
+    uuid: str = ""  # eindeutige OBS-Kennung der Szene – bleibt beim Umbenennen und Umsortieren gleich
+
+    @property
+    def schluessel(self) -> str:
+        """Woran jede Kachel ihren Shot erkennt: die feste OBS-Kennung (nie die Position in der Liste)."""
+        return self.uuid or self.name
 
     def eigene_quellen(self) -> list[Quelle]:
         """Was Kevin in OpenRegie sieht: ohne Uno-Overlays (die stehen in der Bibliothek)."""
         return [q for q in self.quellen if not q.ist_uno]
+
+    def aufnahmen(self) -> list[Quelle]:
+        """Eigene Aufnahme-Quellen (Bildschirm, Fenster, Spiel, Kamera), die eingeschaltet sind."""
+        return [q for q in self.eigene_quellen() if q.an and q.ist_aufnahme]
 
 
 def bild_aus_daten(bilddaten: str) -> QImage | None:
@@ -100,6 +151,7 @@ class _Ablauf:
 class ObsQuellen(QObject):
     geaendert = Signal()  # die Liste der Shots/Quellen ist neu
     live_geaendert = Signal(str)  # Name des Shots, der gerade gesendet wird
+    shot_umbenannt = Signal(str, str)  # (alter Name, neuer Name) – z. B. für Wenn-dann-Regeln
 
     def __init__(self, verbindung: ObsVerbindung, texte, quellen_einstellungen, parent=None,
                  uno_namen: Callable[[], set] | None = None):
@@ -170,7 +222,16 @@ class ObsQuellen(QObject):
             self.gelesen = False
             self.geaendert.emit()
 
-    def _ereignis(self, typ: str, _daten: dict) -> None:
+    def _ereignis(self, typ: str, daten: dict) -> None:
+        if typ == "SceneNameChanged" and daten.get("oldSceneName") and daten.get("sceneName"):
+            alt, neu = daten["oldSceneName"], daten["sceneName"]
+            # Sofort umbenennen (Kachel und Bild bleiben, die Kennung ist ja gleich); die Liste kommt gleich neu
+            for shot in self.shots:
+                if (daten.get("sceneUuid") and shot.uuid == daten["sceneUuid"]) or shot.name == alt:
+                    shot.name = neu
+                    self.geaendert.emit()
+                    break
+            self.shot_umbenannt.emit(alt, neu)
         if typ in _AENDERUNGEN:
             self._veraltet = True
             if self._wer_schaut:
@@ -220,11 +281,14 @@ class ObsQuellen(QObject):
             if ok:
                 for e in sorted(liste.get("sceneItems", []), key=lambda e: -int(e.get("sceneItemIndex", 0))):
                     qn = e.get("sourceName", "")
+                    form = e.get("sceneItemTransform") or {}
                     quellen.append(Quelle(
                         name=qn, art=e.get("inputKind") or "", kennung=int(e.get("sceneItemId", 0)),
                         an=bool(e.get("sceneItemEnabled", True)), ist_uno=qn in uno or qn.startswith("Uno: "),
-                        ist_szene=bool(e.get("isGroup")) or qn in szenennamen or e.get("sourceType") == "OBS_SOURCE_TYPE_SCENE"))
-            shots.append(Shot(name, quellen))
+                        ist_szene=bool(e.get("isGroup")) or qn in szenennamen or e.get("sourceType") == "OBS_SOURCE_TYPE_SCENE",
+                        uuid=str(e.get("sourceUuid") or ""),
+                        breite=int(form["sourceWidth"]) if "sourceWidth" in form else -1))
+            shots.append(Shot(name, quellen, uuid=str(s.get("sceneUuid") or "")))
         self.shots = shots
         self.gelesen = True
         self.geaendert.emit()
@@ -232,14 +296,48 @@ class ObsQuellen(QObject):
     # ------------------------------------------------------------------
     #  Bedienung
     # ------------------------------------------------------------------
-    def live_schalten(self, name: str, fertig: Fertig | None = None) -> None:
-        """Ein Klick auf einen Shot: sofort live."""
+    def shot_zu(self, schluessel: str | None) -> Shot | None:
+        """Den Shot zu einer Kennung finden – oder, falls es keine gibt, zum Namen."""
+        if not schluessel:
+            return None
+        return next((s for s in self.shots if s.uuid and s.uuid == schluessel), None) or self.shot(schluessel)
+
+    def ist_live(self, shot: Shot) -> bool:
+        """Wird genau dieser Shot gesendet? Mit Kennung verglichen, wenn OBS sie kennt – sonst mit dem Namen."""
+        if shot.uuid and self.v.szene_kennung:
+            return shot.uuid == self.v.szene_kennung
+        return bool(self.v.szene) and shot.name == self.v.szene
+
+    def live_schalten(self, schluessel: str, fertig: Fertig | None = None) -> None:
+        """Ein Klick auf einen Shot: sofort live. `schluessel` = feste Kennung des Shots (oder sein Name).
+
+        Geschickt wird die feste OBS-Kennung der Szene – so kommt immer genau die Szene, deren Kachel
+        geklickt wurde, auch wenn sie gerade umbenannt oder in OBS umsortiert wurde."""
+        shot = self.shot_zu(schluessel)
+        name = shot.name if shot else schluessel
+        daten = {"sceneUuid": shot.uuid} if shot and shot.uuid else {"sceneName": name}
+
         def antwort(ok, _d, fehler):
             if not ok:
                 log.warning("Shot „%s“ nicht live geschaltet: %s", name, fehler)
             if fertig:
                 fertig(ok, "" if ok else self._meldung(fehler))
-        self.v.anfrage("SetCurrentProgramScene", {"sceneName": name}, antwort)
+        log.info("Shot „%s“ live schalten (%s)", name, ", ".join(f"{k}={v}" for k, v in daten.items()))
+        self.v.anfrage("SetCurrentProgramScene", daten, antwort)
+
+    def neu_auswaehlen(self, quelle: Quelle, fertig: Fertig) -> None:
+        """Bildschirm/Fenster neu auswählen: öffnet das Auswahlfenster des Systems (KDE) noch einmal."""
+        knopf = quelle.neu_auswaehlen
+        if not knopf:
+            QTimer.singleShot(0, lambda: fertig(False, self.t.meldung_nicht_neu_auswaehlbar))
+            return
+        daten = {"inputUuid": quelle.uuid} if quelle.uuid else {"inputName": quelle.name}
+
+        def antwort(ok, _d, fehler):
+            if not ok:
+                log.warning("Quelle „%s“ nicht neu auswählbar: %s", quelle.name, fehler)
+            fertig(ok, self.t.meldung_neu_auswaehlen if ok else self._meldung(fehler))
+        self.v.anfrage("PressInputPropertiesButton", dict(daten, propertyName=knopf), antwort)
 
     def _alle_namen(self) -> set[str]:
         namen = set()
@@ -547,9 +645,13 @@ class Standbilder(QObject):
 
     Alle `vorschau_sekunden` wird jede beobachtete Quelle einmal geholt – nacheinander, immer nur
     eine Anfrage unterwegs. `beobachten([])` hält alles an: kein Takt, keine Anfrage.
+
+    Beobachtet wird über die feste OBS-Kennung (UUID) – dann gehört jedes Bild sicher zu seiner Szene,
+    auch nach Umbenennen. Nur ohne Kennung (altes OBS) wird nach dem Namen gefragt.
     """
 
-    neues_bild = Signal(str, QImage)
+    neues_bild = Signal(str, QImage)  # (Kennung bzw. Name, Bild)
+    kein_bild = Signal(str)  # OBS konnte kein Bild machen (z. B. Bildschirm nicht freigegeben)
 
     def __init__(self, verbindung: ObsVerbindung, quellen_einstellungen, parent=None):
         super().__init__(parent)
@@ -597,15 +699,17 @@ class Standbilder(QObject):
         name = self._warteschlange.pop(0)
         self._wartet = True
         self.anfragen += 1
-        self.v.anfrage("GetSourceScreenshot", {"sourceName": name, "imageFormat": "jpg",
-                                               "imageWidth": self._breite,
-                                               "imageCompressionQuality": self._qualitaet},
+        ziel = {"sourceUuid": name} if ist_kennung(name) else {"sourceName": name}
+        self.v.anfrage("GetSourceScreenshot", dict(ziel, imageFormat="jpg", imageWidth=self._breite,
+                                                   imageCompressionQuality=self._qualitaet),
                        lambda ok, d, _f, n=name: self._antwort(n, ok, d))
 
     def _antwort(self, name: str, ok: bool, daten: dict) -> None:
         self._wartet = False
-        if ok and name in self._namen:
-            bild = bild_aus_daten(daten.get("imageData", ""))
+        if name in self._namen:
+            bild = bild_aus_daten(daten.get("imageData", "")) if ok else None
             if bild is not None:
                 self.neues_bild.emit(name, bild)
+            elif self.v.verbunden:
+                self.kein_bild.emit(name)
         self._naechstes()

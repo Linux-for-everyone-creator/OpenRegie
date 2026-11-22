@@ -148,6 +148,9 @@ eingabe_hintergrund = "#0B0D10"
 auswahl = "#2D6CDF"
 meldung_gut = "#3FB950"
 meldung_fehler = "#FF6B5E"
+# Band „Kein Bild“ auf einer Kachel (Aufnahme liefert nichts)
+warnung = "#F2B035"
+warnung_text = "#16191F"
 # Build-Anzeige unten links (Wasserzeichen wie bei Windows-Vorabversionen)
 build_text = "#FFFFFF"
 
@@ -358,6 +361,12 @@ shot_hinzufuegen = "Shot hinzufügen"
 shots_leer = "Noch keine Shots."
 shots_keine_verbindung = "Die Shots erscheinen, sobald OBS verbunden ist."
 shot_live = "Live"
+# auf der Kachel, wenn eine Aufnahme (Bildschirm, Fenster, Spiel, Kamera) kein Bild liefert
+shot_kein_bild = "⚠ Kein Bild"
+quelle_kein_bild = "Diese Quelle liefert kein Bild. Bei einer Bildschirmaufnahme: unten „Bildschirm neu auswählen“ drücken und im Fenster des Systems den Bildschirm freigeben."
+knopf_neu_auswaehlen = "🖥  Bildschirm neu auswählen"
+meldung_neu_auswaehlen = "Gleich öffnet sich das Auswahlfenster des Systems. Dort den Bildschirm oder das Fenster wählen und „Teilen“ drücken."
+meldung_nicht_neu_auswaehlbar = "Diese Quelle kann man nicht neu auswählen."
 shot_quellen = "QUELLEN IN DIESEM SHOT"
 shot_keine_quellen = "In diesem Shot ist noch nichts."
 knopf_umbenennen = "✎  Umbenennen"
@@ -415,6 +424,7 @@ gesperrt_shot_live = "Dieser Shot ist gerade live. Erst einen anderen Shot live 
 gesperrt_shot_letzter = "Der letzte Shot kann nicht gelöscht werden – OBS braucht mindestens einen."
 gesperrt_shot_arbeitet = "OBS ist gerade beschäftigt – einen Moment."
 gesperrt_keine_quelle = "Zuerst unten eine Quelle anklicken."
+gesperrt_neu_auswaehlen = "Geht nur bei Bildschirm- oder Fensteraufnahmen. Zuerst so eine Quelle anklicken."
 gesperrt_shot_obs = "Das geht erst, wenn OBS verbunden ist."
 gesperrt_zweck_fehlt = "Zuerst oben auswählen, wofür der Shot ist."
 

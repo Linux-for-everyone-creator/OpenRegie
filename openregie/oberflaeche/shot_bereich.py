@@ -45,6 +45,7 @@ class BildKachel(QAbstractButton):
         self.name = name
         self.symbol = symbol  # statt Bild (z. B. „+“)
         self.bild: QPixmap | None = None
+        self.hinweis = ""  # z. B. „⚠ Kein Bild“ – gut lesbar quer über dem Bild
         self.live = False
         self.bearbeiten = False  # gelber Rahmen: Klick öffnet zum Bearbeiten
         self._bild_hoehe = bild_hoehe
@@ -62,9 +63,15 @@ class BildKachel(QAbstractButton):
 
     def auffrischen(self) -> None:
         t = self.E.texte
-        self.setAccessibleName(f"{self.name} – {t.shot_live}" if self.live else self.name)
-        self.setToolTip(t.shot_live if self.live else self.name)
+        teile = [self.name] + ([t.shot_live] if self.live else []) + ([self.hinweis] if self.hinweis else [])
+        self.setAccessibleName(" – ".join(teile))
+        self.setToolTip(" – ".join(teile[1:]) or self.name)
         self.update()
+
+    def hinweis_setzen(self, text: str) -> None:
+        if text != self.hinweis:
+            self.hinweis = text
+            self.auffrischen()
 
     def bild_setzen(self, bild: QImage) -> None:
         self.bild = QPixmap.fromImage(bild)
@@ -102,6 +109,19 @@ class BildKachel(QAbstractButton):
             p.save()
             p.setClipPath(weg)
             p.drawPixmap(r, self.bild, QRectF(self.bild.rect()))
+            p.restore()
+        if self.hinweis:
+            band = QRectF(innen.left(), innen.bottom() - innen.height() * 0.42, innen.width(), innen.height() * 0.42)
+            p.save()
+            p.setClipPath(weg)
+            p.fillRect(band, QColor(f.warnung))
+            schrift = QFont(self.font())
+            schrift.setPixelSize(int(g.schrift_klein))
+            schrift.setWeight(QFont.Weight.Bold)
+            p.setFont(schrift)
+            p.setPen(QColor(f.warnung_text))
+            text = p.fontMetrics().elidedText(self.hinweis, Qt.TextElideMode.ElideRight, int(band.width()) - 8)
+            p.drawText(band, Qt.AlignmentFlag.AlignCenter, text)
             p.restore()
         rahmen = f.tally_an if self.live else (f.knopf_hover_rahmen if self.bearbeiten else f.tally_aus)
         stift = QPen(QColor(rahmen), dick)
@@ -187,14 +207,18 @@ class ShotLeiste(QWidget, _Sichtbar):
         self.quellen = quellen
         self.standbilder = quellen.standbilder()
         self.standbilder.neues_bild.connect(self._bild)
+        self.standbilder.kein_bild.connect(self._kein_bild)
         t, g = E.texte, E.groessen
         self.offen = True
         self.bearbeiten = False
         self.seite = 0
         self.pro_seite = 4  # passt sich der Breite an (resizeEvent)
         self._kachel_breite = int(g.shot_kachel_breite)
+        # Kachel je Shot – über die feste OBS-Kennung des Shots, NIE über die Position in der Liste.
+        # So schaltet jede Kachel immer genau ihre Szene, auch nach Umbenennen, Neuanlegen, Umsortieren.
         self.kacheln: dict[str, BildKachel] = {}
         self._bilder: dict[str, QImage] = {}
+        self._ohne_bild: set[str] = set()  # Kennungen von Aufnahme-Quellen, die gerade kein Bild liefern
         self._aktiv = False
 
         lay = QHBoxLayout(self)
@@ -252,9 +276,14 @@ class ShotLeiste(QWidget, _Sichtbar):
 
         self._gruppe = QButtonGroup(self)
         self._gruppe.setExclusive(False)
-        quellen.geaendert.connect(self.neu_aufbauen)
+        quellen.geaendert.connect(self._liste_neu)
         quellen.live_geaendert.connect(lambda _n: self._live_zeigen())
         self.neu_aufbauen()
+
+    def kachel(self, name: str) -> BildKachel | None:
+        """Die Kachel zum Shot mit diesem Namen (für Tests und Hilfen)."""
+        shot = self.quellen.shot(name)
+        return self.kacheln.get(shot.schluessel) if shot else None
 
     # --- Sichtbarkeit: nur dann Bilder holen ---------------------------------
     def showEvent(self, e):
@@ -278,7 +307,11 @@ class ShotLeiste(QWidget, _Sichtbar):
 
     def _bilder_beobachten(self) -> None:
         if self._aktiv:
-            self.standbilder.beobachten([n for n in self._namen_auf_seite()])
+            seite = self._namen_auf_seite()
+            # Aufnahmen ohne Bild zusätzlich ansehen – nur so lange, bis sie wieder ein Bild liefern
+            pruefen = [q.schluessel for sl in seite if (s := self.quellen.shot_zu(sl))
+                       for q in s.aufnahmen() if q.schluessel in self._ohne_bild]
+            self.standbilder.beobachten(seite + pruefen)
         else:
             self.standbilder.anhalten()
 
@@ -331,12 +364,27 @@ class ShotLeiste(QWidget, _Sichtbar):
             self.bearbeiten_beendet.emit()
 
     def gewaehlt_setzen(self, name: str | None) -> None:
-        for n, k in self.kacheln.items():
-            k.setChecked(self.bearbeiten and n == name)
+        shot = self.quellen.shot_zu(name) if name else None
+        for sl, k in self.kacheln.items():
+            k.setChecked(self.bearbeiten and shot is not None and sl == shot.schluessel)
 
     # --- Aufbau ----------------------------------------------------------------
     def _namen(self) -> list[str]:
-        return [s.name for s in self.quellen.shots]
+        """Die festen Kennungen aller Shots, in der Reihenfolge wie in OBS."""
+        return [s.schluessel for s in self.quellen.shots]
+
+    def _liste_neu(self) -> None:
+        # Was OBS über die Bildgröße sagt: 0 × 0 = keine Aufnahme (z. B. Bildschirm nicht freigegeben)
+        alle = set()
+        for s in self.quellen.shots:
+            for q in s.aufnahmen():
+                alle.add(q.schluessel)
+                if q.breite == 0:
+                    self._ohne_bild.add(q.schluessel)
+                elif q.breite > 0:
+                    self._ohne_bild.discard(q.schluessel)
+        self._ohne_bild &= alle
+        self.neu_aufbauen()
 
     def _seiten(self) -> int:
         return max(1, -(-(len(self._namen()) + 1) // self.pro_seite))  # + 1 für die „+“-Kachel
@@ -366,15 +414,21 @@ class ShotLeiste(QWidget, _Sichtbar):
             k.hide()
         self.plus.hide()
         auf_seite = self._namen_auf_seite()
-        for name in auf_seite:
-            k = self.kacheln.get(name)
+        for sl in auf_seite:
+            shot = self.quellen.shot_zu(sl)
+            k = self.kacheln.get(sl)
             if k is None:
-                k = BildKachel(self.E, name, int(g.shot_kachel_hoehe))
-                k.clicked.connect(lambda _=False, n=name: self._geklickt(n))
+                k = BildKachel(self.E, shot.name, int(g.shot_kachel_hoehe))
+                # fest verknüpft: diese Kachel gehört für immer zu DIESER Szene (Kennung, nicht Position)
+                k.clicked.connect(lambda _=False, sl=sl: self._geklickt(sl))
                 self._gruppe.addButton(k)
-                self.kacheln[name] = k
-                if name in self._bilder:
-                    k.bild_setzen(self._bilder[name])
+                self.kacheln[sl] = k
+                if sl in self._bilder:
+                    k.bild_setzen(self._bilder[sl])
+            elif k.name != shot.name:  # umbenannt: gleiche Kachel, gleiches Bild, neuer Name
+                k.name = shot.name
+                k.auffrischen()
+            k.hinweis_setzen(self._hinweis(shot))
             k.bearbeiten = self.bearbeiten
             self._reihe.addWidget(k, 1)
             k.show()
@@ -397,28 +451,54 @@ class ShotLeiste(QWidget, _Sichtbar):
         self._bilder_beobachten()
 
     def _live_zeigen(self) -> None:
-        live = self.quellen.live
-        for name, k in self.kacheln.items():
-            if k.live != (name == live):
-                k.live = name == live
+        for sl, k in self.kacheln.items():
+            shot = self.quellen.shot_zu(sl)
+            live = shot is not None and self.quellen.ist_live(shot)
+            if k.live != live:
+                k.live = live
                 k.auffrischen()
 
-    def _bild(self, name: str, bild: QImage) -> None:
-        self._bilder[name] = bild
-        k = self.kacheln.get(name)
+    def _hinweis(self, shot: Shot | None) -> str:
+        if shot is None:
+            return ""
+        return self.E.texte.shot_kein_bild if any(q.schluessel in self._ohne_bild for q in shot.aufnahmen()) else ""
+
+    def _hinweise_zeigen(self) -> None:
+        for sl, k in self.kacheln.items():
+            k.hinweis_setzen(self._hinweis(self.quellen.shot_zu(sl)))
+
+    def _bild(self, sl: str, bild: QImage) -> None:
+        if sl in self._ohne_bild:  # die Aufnahme liefert wieder ein Bild
+            self._ohne_bild.discard(sl)
+            self._hinweise_zeigen()
+            self._bilder_beobachten()
+            return
+        self._bilder[sl] = bild
+        k = self.kacheln.get(sl)
         if k is not None:
             k.bild_setzen(bild)
 
-    def _geklickt(self, name: str) -> None:
-        k = self.kacheln.get(name)
+    def _kein_bild(self, sl: str) -> None:
+        if sl in self.kacheln:
+            return  # die Szene selbst (geht fast immer) – entscheidend sind ihre Aufnahmen
+        if any(q.schluessel == sl for s in self.quellen.shots for q in s.aufnahmen()) and sl not in self._ohne_bild:
+            self._ohne_bild.add(sl)
+            self._hinweise_zeigen()
+
+    def _geklickt(self, sl: str) -> None:
+        k = self.kacheln.get(sl)
+        shot = self.quellen.shot_zu(sl)
+        if shot is None:
+            return  # Shot gibt es nicht mehr (gerade in OBS gelöscht) – lieber nichts schalten als das Falsche
         if self.bearbeiten:
-            self.gewaehlt_setzen(name)
-            self.bearbeiten_geklickt.emit(name)
+            self.gewaehlt_setzen(shot.schluessel)
+            self.bearbeiten_geklickt.emit(shot.name)
             return
         if k is not None:
             k.setChecked(False)
         self.meldung.zeigen("")
-        self.quellen.live_schalten(name, lambda ok, text: None if ok else self.meldung.zeigen(text, False))
+        self.quellen.live_schalten(shot.schluessel,
+                                   lambda ok, text: None if ok else self.meldung.zeigen(text, False))
 
 
 # ---------------------------------------------------------------------------
@@ -436,8 +516,11 @@ class ShotBedienfeld(QWidget, _Sichtbar):
         self.quellen = quellen
         self.standbilder = quellen.standbilder()
         self.standbilder.neues_bild.connect(self._bild)
+        self.standbilder.kein_bild.connect(self._kein_bild)
         self.shot_name: str | None = None
-        self.quelle_name: str | None = None
+        self._shot_schluessel: str | None = None  # feste Kennung des Shots (bleibt beim Umbenennen)
+        self._quelle_schluessel: str | None = None  # feste Kennung der gewählten Quelle
+        self._ohne_bild: set[str] = set()
         self.kacheln: dict[str, BildKachel] = {}
         self._arbeitet = False
         self._aktiv = False
@@ -503,6 +586,10 @@ class ShotBedienfeld(QWidget, _Sichtbar):
         self.knopf_quelle_entfernen.clicked.connect(self._quelle_entfernen)
         reihe.addWidget(self.knopf_quelle_entfernen)
         lay.addLayout(reihe)
+        self.knopf_neu_auswaehlen = knopf(t.knopf_neu_auswaehlen)
+        self.knopf_neu_auswaehlen.clicked.connect(self._neu_auswaehlen)
+        self.knopf_neu_auswaehlen.hide()  # nur, wenn eine Bildschirmaufnahme gewählt ist, die kein Bild liefert
+        lay.addWidget(self.knopf_neu_auswaehlen)
         reihe = QHBoxLayout()
         reihe.setSpacing(g.abstand // 2)
         self.knopf_quelle_neu = knopf(t.knopf_quelle_hinzufuegen, "einblenden")
@@ -519,9 +606,14 @@ class ShotBedienfeld(QWidget, _Sichtbar):
         gesperrt_hinweis(self.knopf_quelle_umbenennen, self._grund_quelle, melden)
         gesperrt_hinweis(self.knopf_quelle_entfernen, self._grund_quelle, melden)
         gesperrt_hinweis(self.knopf_quelle_neu, self._grund_shot, melden)
+        gesperrt_hinweis(self.knopf_neu_auswaehlen, self._grund_neu_auswaehlen, melden)
 
         quellen.geaendert.connect(self._auffrischen)
         quellen.live_geaendert.connect(lambda _n: self._knoepfe())
+
+    def kachel(self, name: str) -> BildKachel | None:
+        """Die Kachel zur Quelle mit diesem Namen (für Tests und Hilfen)."""
+        return next((k for k in self.kacheln.values() if k.name == name), None)
 
     # --- Gründe für ausgegraute Knöpfe -----------------------------------------
     def _grund_shot(self) -> str:
@@ -537,12 +629,35 @@ class ShotBedienfeld(QWidget, _Sichtbar):
             return grund
         if len(self.quellen.shots) <= 1:
             return t.gesperrt_shot_letzter
-        if self.shot_name == self.quellen.live:
+        shot = self._shot()
+        if shot is not None and self.quellen.ist_live(shot):
             return t.gesperrt_shot_live
         return ""
 
     def _grund_quelle(self) -> str:
         return self._grund_shot() or ("" if self.quelle_name else self.E.texte.gesperrt_keine_quelle)
+
+    def _grund_neu_auswaehlen(self) -> str:
+        q = self._quelle()
+        return self._grund_quelle() or ("" if q and q.neu_auswaehlen else self.E.texte.gesperrt_neu_auswaehlen)
+
+    # --- Was gewählt ist (über die feste Kennung, der Name kann sich ändern) ----------
+    @property
+    def quelle_name(self) -> str | None:
+        q = self._quelle()
+        return q.name if q else None
+
+    @quelle_name.setter
+    def quelle_name(self, name: str | None) -> None:
+        shot = self._shot()
+        q = next((q for q in shot.eigene_quellen() if name in (q.name, q.schluessel)), None) if shot and name else None
+        self._quelle_schluessel = q.schluessel if q else None
+
+    def _quelle(self):
+        shot = self._shot()
+        if shot is None or not self._quelle_schluessel:
+            return None
+        return next((q for q in shot.eigene_quellen() if q.schluessel == self._quelle_schluessel), None)
 
     # --- Sichtbarkeit ----------------------------------------------------------
     def showEvent(self, e):
@@ -565,17 +680,26 @@ class ShotBedienfeld(QWidget, _Sichtbar):
 
     # --- Zeigen ----------------------------------------------------------------
     def zeigen(self, shot_name: str) -> None:
-        if shot_name != self.shot_name:
-            self.quelle_name = None
+        shot = self.quellen.shot_zu(shot_name)
+        schluessel = shot.schluessel if shot else shot_name
+        if schluessel != self._shot_schluessel:
+            self._quelle_schluessel = None
+            self._ohne_bild.clear()
             self._loeschen_bestaetigen = False
             self.meldung.zeigen("")
             self._umbenennen_abbrechen()
-        self.shot_name = shot_name
+        self._shot_schluessel = schluessel
+        self.shot_name = shot.name if shot else shot_name
         self._auffrischen()
         self.aktiv_pruefen()
 
     def _shot(self) -> Shot | None:
-        return self.quellen.shot(self.shot_name) if self.shot_name else None
+        if not self._shot_schluessel:
+            return None
+        shot = self.quellen.shot_zu(self._shot_schluessel)
+        if shot is not None:
+            self.shot_name = shot.name  # z. B. in OBS umbenannt: hier gleich mit
+        return shot
 
     def _auffrischen(self) -> None:
         g = self.E.groessen
@@ -583,25 +707,35 @@ class ShotBedienfeld(QWidget, _Sichtbar):
         if shot is not None:
             self.name.setText(shot.name)
         quellen = shot.eigene_quellen() if shot else []
-        namen = [q.name for q in quellen]
-        for name in list(self.kacheln):
-            if name not in namen:
-                k = self.kacheln.pop(name)
+        schluessel = [q.schluessel for q in quellen]
+        for sl in list(self.kacheln):
+            if sl not in schluessel:
+                k = self.kacheln.pop(sl)
                 k.hide()
                 k.deleteLater()
+        for q in quellen:
+            if q.ohne_bild:
+                self._ohne_bild.add(q.schluessel)
+            elif q.breite > 0:
+                self._ohne_bild.discard(q.schluessel)
+        self._ohne_bild &= set(schluessel)
         while self._gitter.count():
             self._gitter.takeAt(0)
         for nr, q in enumerate(quellen):
-            k = self.kacheln.get(q.name)
+            k = self.kacheln.get(q.schluessel)
             if k is None:
                 k = BildKachel(self.E, q.name, int(g.quelle_kachel_hoehe))
-                k.clicked.connect(lambda _=False, n=q.name: self._quelle_waehlen(n))
-                self.kacheln[q.name] = k
-            k.setChecked(q.name == self.quelle_name)
+                k.clicked.connect(lambda _=False, sl=q.schluessel: self._quelle_waehlen(sl))
+                self.kacheln[q.schluessel] = k
+            elif k.name != q.name:
+                k.name = q.name
+                k.auffrischen()
+            k.hinweis_setzen(self.E.texte.shot_kein_bild if q.schluessel in self._ohne_bild else "")
+            k.setChecked(q.schluessel == self._quelle_schluessel)
             self._gitter.addWidget(k, nr // self.SPALTEN, nr % self.SPALTEN)
             k.show()
-        if self.quelle_name not in self.kacheln:
-            self.quelle_name = None
+        if self._quelle_schluessel not in self.kacheln:
+            self._quelle_schluessel = None
         self.leer.setVisible(not quellen)
         self._knoepfe()
         if self._aktiv:
@@ -609,7 +743,8 @@ class ShotBedienfeld(QWidget, _Sichtbar):
 
     def _knoepfe(self) -> None:
         t = self.E.texte
-        live = self.shot_name is not None and self.shot_name == self.quellen.live
+        shot = self._shot()
+        live = shot is not None and self.quellen.ist_live(shot)
         self.tally.farbe_setzen(self.E.farben.tally_an if live else self.E.farben.tally_aus)
         self.tally_text.setText(t.shot_live if live else "")
         self.knopf_umbenennen.setEnabled(not self._grund_shot())
@@ -620,19 +755,45 @@ class ShotBedienfeld(QWidget, _Sichtbar):
         self.knopf_quelle_umbenennen.setEnabled(not self._grund_quelle())
         self.knopf_quelle_entfernen.setEnabled(not self._grund_quelle())
         self.knopf_quelle_neu.setEnabled(not self._grund_shot())
-        self.quelle_text.setText(t.quelle_ausgewaehlt.format(name=self.quelle_name) if self.quelle_name else "")
-        self.quelle_text.setVisible(bool(self.quelle_name))
-        for n, k in self.kacheln.items():
-            k.setChecked(n == self.quelle_name)
+        q = self._quelle()
+        ohne_bild = q is not None and q.schluessel in self._ohne_bild
+        text = t.quelle_ausgewaehlt.format(name=q.name) if q else ""
+        self.quelle_text.setText(f"{text}\n{t.quelle_kein_bild}" if ohne_bild else text)
+        self.quelle_text.setVisible(bool(q))
+        self.knopf_neu_auswaehlen.setVisible(ohne_bild and bool(q.neu_auswaehlen))
+        self.knopf_neu_auswaehlen.setEnabled(not self._grund_neu_auswaehlen())
+        for sl, k in self.kacheln.items():
+            k.setChecked(sl == self._quelle_schluessel)
 
-    def _bild(self, name: str, bild: QImage) -> None:
-        k = self.kacheln.get(name)
+    def _bild(self, sl: str, bild: QImage) -> None:
+        k = self.kacheln.get(sl)
         if k is not None:
             k.bild_setzen(bild)
+        if sl in self._ohne_bild:  # liefert wieder ein Bild
+            self._ohne_bild.discard(sl)
+            if k is not None:
+                k.hinweis_setzen("")
+            self._knoepfe()
 
-    def _quelle_waehlen(self, name: str) -> None:
-        self.quelle_name = name
+    def _kein_bild(self, sl: str) -> None:
+        k = self.kacheln.get(sl)
+        shot = self._shot()
+        q = next((q for q in shot.eigene_quellen() if q.schluessel == sl), None) if shot else None
+        if k is not None and q is not None and q.ist_aufnahme and sl not in self._ohne_bild:
+            self._ohne_bild.add(sl)
+            k.hinweis_setzen(self.E.texte.shot_kein_bild)
+            self._knoepfe()
+
+    def _quelle_waehlen(self, sl: str) -> None:
+        self._quelle_schluessel = sl
         self._knoepfe()
+
+    def _neu_auswaehlen(self) -> None:
+        q = self._quelle()
+        if q is None:
+            return
+        self.meldung.zeigen("")
+        self.quellen.neu_auswaehlen(q, lambda ok, text: self.meldung.zeigen(text, ok))
 
     # --- Umbenennen ---------------------------------------------------------------
     def _umbenennen_oeffnen(self, was: str) -> None:
@@ -657,8 +818,10 @@ class ShotBedienfeld(QWidget, _Sichtbar):
                 if was == "shot":
                     self.shot_name = text
                     self.name.setText(text)
-                else:
-                    self.quelle_name = text  # die Kachel kommt mit dem neuen Namen, sobald OBS es meldet
+                    if not self.quellen.shot_zu(self._shot_schluessel):  # ohne Kennung: Name ist der Schlüssel
+                        self._shot_schluessel = text
+                elif self._quelle() is None:
+                    self._quelle_schluessel = text  # ohne Kennung: die Kachel kommt mit dem neuen Namen
                 self._umbenennen_abbrechen()
                 self.meldung.zeigen(self.E.texte.meldung_umbenannt.format(name=text), True)
             else:
@@ -686,6 +849,7 @@ class ShotBedienfeld(QWidget, _Sichtbar):
             self.meldung.zeigen(text, ok)
             if ok:
                 self.shot_name = None
+                self._shot_schluessel = None
                 self.aktiv_pruefen()
                 self.fertig.emit()
             self._knoepfe()
@@ -703,7 +867,7 @@ class ShotBedienfeld(QWidget, _Sichtbar):
             self._arbeitet = False
             self.meldung.zeigen(text, ok)
             if ok:
-                self.quelle_name = None
+                self._quelle_schluessel = None
             self._knoepfe()
 
         self.quellen.quelle_entfernen(shot, quelle, fertig)

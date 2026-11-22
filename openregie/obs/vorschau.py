@@ -60,10 +60,13 @@ class Vorschau(QObject):
         if not szene:
             return
         self._wartet = True
+        # über die feste Kennung, wenn OBS sie kennt: stimmt auch, während die Szene umbenannt wird
+        kennung = getattr(self._verbindung, "szene_kennung", "")
+        ziel = {"sourceUuid": kennung} if kennung else {"sourceName": szene}
         self._verbindung.anfrage(
             "GetSourceScreenshot",
             {
-                "sourceName": szene,
+                **ziel,
                 "imageFormat": "jpg",
                 "imageWidth": self._breite,
                 "imageCompressionQuality": self._qualitaet,

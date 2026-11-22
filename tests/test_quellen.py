@@ -313,7 +313,7 @@ class ShotFensterTest(Grundlage):
         self.assertTrue(warte_bis(lambda: self.v.verbunden, 3000))
         self.f.resize(1903, 971)  # Kevins Bildschirm
         self.l = self.f.shot_leiste
-        self.assertTrue(warte_bis(lambda: set(self.l.kacheln) == {"Szene 1", "Pause"}, 3000))
+        self.assertTrue(warte_bis(lambda: {k.name for k in self.l.kacheln.values()} == {"Szene 1", "Pause"}, 3000))
 
     def bild_anfragen(self):
         return sum(1 for a, d in self.obs.anfragen if a == "GetSourceScreenshot"
@@ -321,18 +321,18 @@ class ShotFensterTest(Grundlage):
 
     def test_kacheln_mit_bild_und_live(self):
         self.assertTrue(warte_bis(lambda: all(k.bild is not None for k in self.l.kacheln.values()), 3000))
-        self.assertTrue(self.l.kacheln["Szene 1"].live)
-        self.assertFalse(self.l.kacheln["Pause"].live)
+        self.assertTrue(self.l.kachel("Szene 1").live)
+        self.assertFalse(self.l.kachel("Pause").live)
         self.assertTrue(self.l.plus.isVisible())
         for k in [*self.l.kacheln.values(), self.l.plus]:
             self.assertGreaterEqual(k.height(), 100)
             self.assertGreaterEqual(k.width(), 120)
 
     def test_ein_klick_schaltet_live(self):
-        klick(self.l.kacheln["Pause"])
+        klick(self.l.kachel("Pause"))
         self.assertTrue(warte_bis(lambda: self.obs.szene == "Pause", 3000))
-        self.assertTrue(warte_bis(lambda: self.l.kacheln["Pause"].live, 2000))
-        self.assertFalse(self.l.kacheln["Szene 1"].live)
+        self.assertTrue(warte_bis(lambda: self.l.kachel("Pause").live, 2000))
+        self.assertFalse(self.l.kachel("Szene 1").live)
         self.assertIs(self.f.bedienfelder.currentWidget(), self.f.uno_einrichtung)  # rechts bleibt, was war
 
     def test_zugeklappt_keine_bilder(self):
@@ -349,7 +349,7 @@ class ShotFensterTest(Grundlage):
         self.assertEqual(self.bild_anfragen(), n)
         self.assertEqual(self.f.quellen.lesungen, lesungen)
         klick(self.l.knopf_auf_zu)
-        self.assertTrue(warte_bis(lambda: "Neu" in self.l.kacheln, 3000))
+        self.assertTrue(warte_bis(lambda: self.l.kachel("Neu") is not None, 3000))
         self.assertTrue(warte_bis(lambda: self.bild_anfragen() > n, 3000))
 
     def test_minimiert_keine_bilder(self):
@@ -368,7 +368,7 @@ class ShotFensterTest(Grundlage):
     def test_bearbeiten_umbenennen_loeschen(self):
         t = self.E.texte
         klick(self.l.knopf_bearbeiten)
-        klick(self.l.kacheln["Pause"])
+        klick(self.l.kachel("Pause"))
         b = self.f.shot_bedienfeld
         self.assertIs(self.f.bedienfelder.currentWidget(), b)
         self.assertEqual(self.obs.szene, "Szene 1")  # nicht live geschaltet
@@ -378,7 +378,7 @@ class ShotFensterTest(Grundlage):
         b.eingabe.feld.setText("Gleich live")
         klick(b.eingabe.ok)
         self.assertTrue(warte_bis(lambda: "Gleich live" in self.obs.szenen, 3000))
-        self.assertTrue(warte_bis(lambda: "Gleich live" in self.l.kacheln, 3000))
+        self.assertTrue(warte_bis(lambda: self.l.kachel("Gleich live") is not None, 3000))
         self.assertEqual(b.name.text(), "Gleich live")
         self.assertEqual(b.meldung.text(), t.meldung_umbenannt.format(name="Gleich live"))
         klick(b.knopf_loeschen)
@@ -386,13 +386,13 @@ class ShotFensterTest(Grundlage):
         self.assertIn("Gleich live", self.obs.szenen)
         klick(b.knopf_loeschen)
         self.assertTrue(warte_bis(lambda: "Gleich live" not in self.obs.szenen, 3000))
-        self.assertTrue(warte_bis(lambda: "Gleich live" not in self.l.kacheln, 3000))
+        self.assertTrue(warte_bis(lambda: self.l.kachel("Gleich live") is None, 3000))
         self.assertFalse(self.l.bearbeiten)
         self.assertIs(self.f.bedienfelder.currentWidget(), self.f.uno_einrichtung)
 
     def test_live_shot_nicht_loeschbar_und_sagt_warum(self):
         klick(self.l.knopf_bearbeiten)
-        klick(self.l.kacheln["Szene 1"])
+        klick(self.l.kachel("Szene 1"))
         b = self.f.shot_bedienfeld
         self.assertFalse(b.knopf_loeschen.isEnabled())
         from openregie.oberflaeche.bausteine import gesperrt_text
@@ -402,17 +402,17 @@ class ShotFensterTest(Grundlage):
 
     def test_quellen_als_kacheln_umbenennen_entfernen(self):
         klick(self.l.knopf_bearbeiten)
-        klick(self.l.kacheln["Szene 1"])
+        klick(self.l.kachel("Szene 1"))
         b = self.f.shot_bedienfeld
-        self.assertTrue(warte_bis(lambda: "Bildschirmaufnahme" in b.kacheln, 3000))
-        self.assertTrue(warte_bis(lambda: b.kacheln["Bildschirmaufnahme"].bild is not None, 3000))
-        klick(b.kacheln["Bildschirmaufnahme"])
+        self.assertTrue(warte_bis(lambda: b.kachel("Bildschirmaufnahme") is not None, 3000))
+        self.assertTrue(warte_bis(lambda: b.kachel("Bildschirmaufnahme").bild is not None, 3000))
+        klick(b.kachel("Bildschirmaufnahme"))
         self.assertTrue(b.knopf_quelle_umbenennen.isEnabled())
         klick(b.knopf_quelle_umbenennen)
         b.eingabe.feld.setText("Desktop")
         b.eingabe.feld.returnPressed.emit()
         self.assertTrue(warte_bis(lambda: "Desktop" in self.obs.quellen, 3000))
-        self.assertTrue(warte_bis(lambda: "Desktop" in b.kacheln, 3000))
+        self.assertTrue(warte_bis(lambda: b.kachel("Desktop") is not None, 3000))
         self.assertEqual(b.quelle_name, "Desktop")
         klick(b.knopf_quelle_entfernen)
         self.assertTrue(warte_bis(lambda: "Desktop" not in self.obs.quellen, 3000))
@@ -420,7 +420,7 @@ class ShotFensterTest(Grundlage):
 
     def test_bedienfeld_zu_keine_bilder(self):
         klick(self.l.knopf_bearbeiten)
-        klick(self.l.kacheln["Szene 1"])
+        klick(self.l.kachel("Szene 1"))
         b = self.f.shot_bedienfeld
         self.assertTrue(warte_bis(lambda: b.standbilder.laeuft, 2000))
         klick(b.knopf_fertig)
@@ -444,7 +444,7 @@ class ShotFensterTest(Grundlage):
         self.assertTrue(warte_bis(lambda: "Reactions" in self.obs.szenen, 3000))
         self.assertTrue(warte_bis(lambda: self.f.bedienfelder.currentWidget() is self.f.shot_bedienfeld, 3000))
         self.assertEqual(self.f.shot_bedienfeld.shot_name, "Reactions")
-        self.assertTrue(warte_bis(lambda: "Reactions" in self.l.kacheln, 3000))
+        self.assertTrue(warte_bis(lambda: self.l.kachel("Reactions") is not None, 3000))
         self.assertEqual(self.obs.szene, "Szene 1")  # nicht einfach live geschaltet
         ids = {n_: k for k, n_, _ in self.obs.szenen["Reactions"]}
         self.assertLess(self.obs.transform[ids["Kamerabild"]]["positionX"], 1280 / 2)  # links unten
@@ -464,7 +464,7 @@ class ShotFensterTest(Grundlage):
 
     def test_quelle_in_shot_hinzufuegen(self):
         klick(self.l.knopf_bearbeiten)
-        klick(self.l.kacheln["Pause"])
+        klick(self.l.kachel("Pause"))
         klick(self.f.shot_bedienfeld.knopf_quelle_neu)
         n = self.f.shot_neu
         self.assertEqual(n.modus, "quelle")
@@ -472,11 +472,11 @@ class ShotFensterTest(Grundlage):
         klick(n.anlegen)
         self.assertTrue(warte_bis(lambda: self.obs.reihenfolge("Pause") == ["Kamerabild"], 3000))
         self.assertTrue(warte_bis(lambda: self.f.bedienfelder.currentWidget() is self.f.shot_bedienfeld, 3000))
-        self.assertTrue(warte_bis(lambda: "Kamerabild" in self.f.shot_bedienfeld.kacheln, 3000))
+        self.assertTrue(warte_bis(lambda: self.f.shot_bedienfeld.kachel("Kamerabild") is not None, 3000))
 
     def test_overlay_klick_beendet_bearbeiten(self):
         klick(self.l.knopf_bearbeiten)
-        klick(self.l.kacheln["Pause"])
+        klick(self.l.kachel("Pause"))
         self.f.shot_leiste.bearbeiten_setzen(False)
         self.assertIsNot(self.f.bedienfelder.currentWidget(), self.f.shot_bedienfeld)
 
@@ -484,13 +484,13 @@ class ShotFensterTest(Grundlage):
         klick(self.l.plus)
         klick(self.f.shot_neu.zweck_knoepfe["spiel"])
         klick(self.f.shot_neu.anlegen)
-        pause = groesste_pause_ms(1500, lambda: "Spiel" in self.l.kacheln)
-        self.assertIn("Spiel", self.l.kacheln)
+        pause = groesste_pause_ms(1500, lambda: self.l.kachel("Spiel") is not None)
+        self.assertIsNotNone(self.l.kachel("Spiel"))
         self.assertLess(pause, 150)
 
     def test_knoepfe_gross_genug(self):
         klick(self.l.knopf_bearbeiten)
-        klick(self.l.kacheln["Szene 1"])
+        klick(self.l.kachel("Szene 1"))
         from PySide6.QtWidgets import QPushButton
         for k in self.f.findChildren(QPushButton):
             if k.isVisible():

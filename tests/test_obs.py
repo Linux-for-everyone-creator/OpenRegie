@@ -291,7 +291,7 @@ class VorschauTest(Grundlage):
         self.assertTrue(warte_bis(lambda: len(bilder) >= 5, 3000))
         self.assertEqual(bilder[0].width(), 320)
         anfrage = [d for t, d in self.obs.anfragen if t == "GetSourceScreenshot"][0]
-        self.assertEqual(anfrage["sourceName"], "Szene 1")
+        self.assertEqual(anfrage["sourceUuid"], self.obs.kennungen["Szene 1"])  # feste Kennung, nicht Name
         self.assertEqual(anfrage["imageWidth"], self.E.vorschau.bildbreite)
         vorschau.anhalten()
 
@@ -301,7 +301,7 @@ class VorschauTest(Grundlage):
         self.obs.szene_wechseln("Pause")
         warte(300)
         letzte = [d for t, d in self.obs.anfragen if t == "GetSourceScreenshot"][-1]
-        self.assertEqual(letzte["sourceName"], "Pause")
+        self.assertEqual(letzte["sourceUuid"], self.obs.kennungen["Pause"])
         vorschau.anhalten()
 
     def test_kein_stau_wenn_obs_langsam(self):

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import json
+import uuid as _uuid
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QObject
 from PySide6.QtGui import QColor, QImage
@@ -21,9 +22,9 @@ SALZ = "salzSALZ123"
 AUFGABE = "aufgabe456"
 
 
-def testbild_daten(breite=320, hoehe=180) -> str:
+def testbild_daten(breite=320, hoehe=180, farbe="#336699") -> str:
     bild = QImage(breite, hoehe, QImage.Format.Format_RGB32)
-    bild.fill(QColor("#336699"))
+    bild.fill(QColor(farbe))
     puffer = QBuffer()
     puffer.open(QIODevice.OpenModeFlag.WriteOnly)
     bild.save(puffer, "JPG")
@@ -61,9 +62,30 @@ class FalschesObs(QObject):
         self.naechste_id = 1
         self.transform: dict[int, dict] = {}
         self.bild = testbild_daten()
+        self.bilder: dict[str, str] = {}  # eigenes Bild je Szene/Quelle (sonst self.bild)
         self.sammlung = "Unbenannt"
         self.umsortiert = 0  # wie oft SetSceneItemIndex kam
         self.sammlungen = ["Unbenannt", "Show"]
+        # Wie OBS 30+: jede Szene und Quelle hat eine feste Kennung (UUID), die beim Umbenennen bleibt
+        self.mit_kennung = True  # False = altes OBS ohne Kennungen
+        self.kennungen: dict[str, str] = {}
+        self.ohne_bild: set[str] = set()  # Quellen, die kein Bild liefern (z. B. Bildschirm nicht freigegeben)
+        self.knopf_gedrueckt: list[tuple[str, str]] = []  # (Quelle, Knopf) von PressInputPropertiesButton
+
+    def kennung(self, name: str) -> str:
+        if name not in self.kennungen:
+            self.kennungen[name] = str(_uuid.uuid4())
+        return self.kennungen[name] if self.mit_kennung else ""
+
+    def _name_zu(self, d: dict, name_feld: str, uuid_feld: str) -> str | None:
+        """Wie OBS: Name ODER Kennung angeben."""
+        if d.get(uuid_feld):
+            return next((n for n, k in self.kennungen.items() if k == d[uuid_feld]), None)
+        return d.get(name_feld)
+
+    def _umbenennen(self, alt: str, neu: str) -> None:
+        if alt in self.kennungen:
+            self.kennungen[neu] = self.kennungen.pop(alt)
 
     # ------------------------------------------------------------------
     def _neu(self):
@@ -115,28 +137,34 @@ class FalschesObs(QObject):
         if typ == "GetStreamStatus":
             return (*OK, {"outputActive": self.stream_aktiv, "outputReconnecting": False})
         if typ == "GetCurrentProgramScene":
-            return (*OK, {"sceneName": self.szene, "currentProgramSceneName": self.szene})
+            k = self.kennung(self.szene)
+            return (*OK, {"sceneName": self.szene, "currentProgramSceneName": self.szene,
+                          "sceneUuid": k, "currentProgramSceneUuid": k})
         if typ == "GetSourceScreenshot":
-            if d.get("sourceName") not in self.szenen and d.get("sourceName") not in self.quellen:
+            name = self._name_zu(d, "sourceName", "sourceUuid")
+            if name not in self.szenen and name not in self.quellen:
                 return (False, 600, "No source was found by the name of `x`.", None)
-            return (*OK, {"imageData": self.bild})
+            if name in self.ohne_bild:
+                return (False, 702, "Failed to render screenshot.", None)
+            return (*OK, {"imageData": self.bilder.get(name, self.bild)})
         if typ == "SetCurrentProgramScene":
-            if d.get("sceneName") not in self.szenen:
+            name = self._name_zu(d, "sceneName", "sceneUuid")
+            if name not in self.szenen:
                 return (False, 600, "No scene", None)
-            self.szene_wechseln(d["sceneName"])
+            self.szene_wechseln(name)
             return (*OK, None)
         if typ == "CreateScene":
             if d["sceneName"] in self.szenen or d["sceneName"] in self.quellen:
                 return (False, 601, "A source already exists by that scene name.", None)
             self.szene_anlegen(d["sceneName"])
-            return (*OK, {"sceneUuid": "s"})
+            return (*OK, {"sceneUuid": self.kennung(d["sceneName"])})
         if typ == "RemoveScene":
             if d["sceneName"] not in self.szenen:
                 return (False, 600, "No scene", None)
             del self.szenen[d["sceneName"]]
             if self.szene == d["sceneName"]:
                 self.szene_wechseln(next(iter(self.szenen)))
-            self.ereignis("SceneRemoved", {"sceneName": d["sceneName"]})
+            self.ereignis("SceneRemoved", {"sceneName": d["sceneName"], "sceneUuid": self.kennung(d["sceneName"])})
             return (*OK, None)
         if typ == "SetSceneName":
             alt, neu = d["sceneName"], d["newSceneName"]
@@ -144,10 +172,7 @@ class FalschesObs(QObject):
                 return (False, 600, "No scene", None)
             if neu in self.szenen or neu in self.quellen:
                 return (False, 601, "A source already exists by that new scene name.", None)
-            self.szenen = {(neu if k == alt else k): v for k, v in self.szenen.items()}
-            if self.szene == alt:
-                self.szene = neu
-            self.ereignis("SceneNameChanged", {"oldSceneName": alt, "sceneName": neu})
+            self.szene_umbenennen(alt, neu)
             return (*OK, None)
         if typ == "SetInputName":
             alt, neu = d["inputName"], d["newInputName"]
@@ -156,6 +181,10 @@ class FalschesObs(QObject):
             if neu in self.szenen or neu in self.quellen:
                 return (False, 601, "A source already exists by that new input name.", None)
             self.quellen = {(neu if k == alt else k): v for k, v in self.quellen.items()}
+            self._umbenennen(alt, neu)
+            self.ohne_bild = {neu if n == alt else n for n in self.ohne_bild}
+            if alt in self.bilder:
+                self.bilder[neu] = self.bilder.pop(alt)
             for szene in self.szenen:
                 self.szenen[szene] = [(k, neu if n == alt else n, an) for k, n, an in self.szenen[szene]]
             self.ereignis("InputNameChanged", {"oldInputName": alt, "inputName": neu})
@@ -189,7 +218,8 @@ class FalschesObs(QObject):
             return (*OK, None)
         if typ == "GetSceneList":
             return (*OK, {"currentProgramSceneName": self.szene,
-                          "scenes": [{"sceneName": n, "sceneIndex": i} for i, n in enumerate(self.szenen)]})
+                          "scenes": [{"sceneName": n, "sceneUuid": self.kennung(n), "sceneIndex": i}
+                                     for i, n in enumerate(self.szenen)]})
         if typ == "GetInputList":
             art = d.get("inputKind")
             return (*OK, {"inputs": [{"inputName": n, "inputKind": q["kind"]} for n, q in self.quellen.items()
@@ -206,8 +236,10 @@ class FalschesObs(QObject):
             if d.get("sceneName") not in self.szenen:
                 return (False, 600, "No scene", None)
             return (*OK, {"sceneItems": [
-                {"sceneItemId": k, "sourceName": n, "sceneItemIndex": i, "sceneItemEnabled": an,
-                 "inputKind": self.quellen.get(n, {}).get("kind")}
+                {"sceneItemId": k, "sourceName": n, "sourceUuid": self.kennung(n), "sceneItemIndex": i,
+                 "sceneItemEnabled": an, "inputKind": self.quellen.get(n, {}).get("kind"),
+                 "sceneItemTransform": {"sourceWidth": 0 if n in self.ohne_bild else 1280,
+                                        "sourceHeight": 0 if n in self.ohne_bild else 720}}
                 for i, (k, n, an) in enumerate(self.szenen[d["sceneName"]])]})
         if typ == "SetSceneItemIndex":
             liste = self.szenen[d["sceneName"]]
@@ -241,7 +273,7 @@ class FalschesObs(QObject):
             self.quellen[d["inputName"]] = {"kind": d["inputKind"], "settings": dict(d.get("inputSettings", {}))}
             kennung = self._in_szene(d["sceneName"], d["inputName"], d.get("sceneItemEnabled", True))
             self.ereignis("InputCreated", {"inputName": d["inputName"]})
-            return (*OK, {"inputUuid": "u", "sceneItemId": kennung})
+            return (*OK, {"inputUuid": self.kennung(d["inputName"]), "sceneItemId": kennung})
         if typ == "SetInputSettings":
             q = self.quellen.get(d["inputName"])
             if not q:
@@ -249,6 +281,10 @@ class FalschesObs(QObject):
             q["settings"].update(d["inputSettings"])
             return (*OK, None)
         if typ == "PressInputPropertiesButton":
+            name = self._name_zu(d, "inputName", "inputUuid")
+            if name not in self.quellen:
+                return (False, 600, "No source", None)
+            self.knopf_gedrueckt.append((name, d.get("propertyName")))
             return (*OK, None)
         if typ == "GetSceneItemId":
             for kennung, name, _an in self.szenen.get(d["sceneName"], []):
@@ -292,7 +328,24 @@ class FalschesObs(QObject):
 
     def szene_anlegen(self, name):
         self.szenen[name] = []
-        self.ereignis("SceneCreated", {"sceneName": name, "isGroup": False})
+        self.ereignis("SceneCreated", {"sceneName": name, "sceneUuid": self.kennung(name), "isGroup": False})
+
+    def szene_umbenennen(self, alt, neu):
+        """Wie in OBS umbenannt (Rechtsklick → Umbenennen)."""
+        self.szenen = {(neu if k == alt else k): v for k, v in self.szenen.items()}
+        self._umbenennen(alt, neu)
+        if alt in self.bilder:
+            self.bilder[neu] = self.bilder.pop(alt)
+        if self.szene == alt:
+            self.szene = neu
+        self.ereignis("SceneNameChanged", {"oldSceneName": alt, "sceneName": neu, "sceneUuid": self.kennung(neu)})
+
+    def szenen_umsortieren(self, reihenfolge_oben_zuerst):
+        """Wie in OBS mit der Maus umsortiert. (OBS zählt von unten: oberste Szene = höchste Nummer.)"""
+        namen = list(reversed(reihenfolge_oben_zuerst))
+        self.szenen = {n: self.szenen[n] for n in namen}
+        self.ereignis("SceneListChanged", {"scenes": [{"sceneName": n, "sceneUuid": self.kennung(n), "sceneIndex": i}
+                                                      for i, n in enumerate(namen)]})
 
     # --- Steuerung aus dem Test -------------------------------------------
     def ereignis(self, typ, daten):
@@ -311,7 +364,7 @@ class FalschesObs(QObject):
 
     def szene_wechseln(self, name):
         self.szene = name
-        self.ereignis("CurrentProgramSceneChanged", {"sceneName": name})
+        self.ereignis("CurrentProgramSceneChanged", {"sceneName": name, "sceneUuid": self.kennung(name)})
 
     def alle_trennen(self):
         for c in list(self.clients):

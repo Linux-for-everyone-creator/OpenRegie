@@ -1,10 +1,10 @@
 # OpenRegie – Profi-Regie für alle. Einfach live.
 
 > [!WARNING]
-> **Pre-Alpha (Build 1.2).** OpenRegie ist in früher Entwicklung. Funktionen ändern sich,
+> **Pre-Alpha (Build 1.2.1).** OpenRegie ist in früher Entwicklung. Funktionen ändern sich,
 > Fehler sind wahrscheinlich. Bitte noch **nicht** für wichtige Livestreams verwenden.
 >
-> **Pre-alpha (build 1.2).** OpenRegie is in early development. Features will change and
+> **Pre-alpha (build 1.2.1).** OpenRegie is in early development. Features will change and
 > bugs are likely. Please do **not** rely on it for important live streams yet.
 
 🇩🇪 [Deutsch](#deutsch) · 🇬🇧 [English](#english)

@@ -83,12 +83,29 @@ Vorbild für die Shots: Telestream Wirecast. Ab diesem Build streamt Kevin regul
 - [x] Test mit echtem OBS 33.0.3 (`werkzeuge/test_build_1_2_mit_echtem_obs.py`): 12 Läufe, je 37 von 37
 - [x] Rechenlast gemessen: Leerlauf, Shot-Leiste offen, Regel aktiv – jeweils unter 1 % eines Kerns
 
+### Build 1.2.1 – Korrektur: jede Kachel gehört fest zu ihrer Szene · *fertig (22.11.2026)*
+Fehlerbericht: Klick auf „Bildschirmaufnahme“ zeigte nur den Countdown.
+- [x] Ursache gefunden: Die Kachel schaltete die richtige Szene – aber die Bildschirmaufnahme lieferte
+      kein Bild (Bildschirm im System-Fenster nicht freigegeben), und das Uno-Overlay „Countdown“ liegt
+      in jeder Szene ganz oben. Zu sehen war darum nur der Countdown.
+- [x] Jede Kachel ist fest mit der eindeutigen OBS-Kennung (UUID) ihrer Szene verknüpft – nie mit der
+      Position in der Liste. Umschalten, Vorschaubilder und das große Live-Bild laufen über diese Kennung.
+- [x] Stimmt auch nach Umbenennen (auch der Live-Szene – sofort), Neuanlegen, Umsortieren und wenn zwei
+      Szenen die Namen tauschen. Wenn-dann-Regeln ziehen den neuen Namen eines Shots mit.
+- [x] „⚠ Kein Bild“ auf der Kachel, wenn eine Aufnahme nichts liefert; beim Bearbeiten der Knopf
+      „Bildschirm neu auswählen“ (öffnet das Auswahlfenster des Systems noch einmal)
+- [x] Geprüft: Unit-Tests je 12×, echtes OBS 33.0.3 (`werkzeuge/test_zuordnung_mit_echtem_obs.py`,
+      5 Szenen) 12 Läufe
+- [ ] Frischen Screenshot fürs README machen (Kevin)
+
 ### Build 1.3
 - [ ] Lautstärke-Auslöser: Spricht Kevin (Pegel über Schwelle), schaltet OpenRegie auf die Kamera um;
       Schwellwert einstellbar. Pegelmessung nur, solange so eine Regel aktiv ist.
 - [ ] Spiel-Erkennung: Bei aktivem Spiel-Shot die Kamera klein einblenden statt umzuschalten
 - [ ] Performance-Test mit aktiver Lautstärke-Regel (Rechenlast vorher und nachher)
 - [ ] Kamera auswählen, wenn mehrere angeschlossen sind (jetzt: die erste)
+- [ ] Wählbar, in welchen Shots ein Uno-Overlay liegt (bisher automatisch in jedem – z. B. Countdown
+      nur im Shot „Countdown“) *(aus dem Fehlerbericht zu 1.2.1)*
 - [ ] Overlays direkt bearbeiten: über den Knopf „Bearbeiten“ (einfacher Klick) und zusätzlich per
       Doppelklick in der Vorschau *(war für 1.2 geplant, verschoben)*
 
