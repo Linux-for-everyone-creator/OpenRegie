@@ -109,7 +109,7 @@ Fehlerbericht: Countdown steht auf 00:00 und lässt sich nicht bedienen.
       Regiepult, solange es offen ist; Auswahl und Optionen unverändert; rechts bleibt der Countdown
 - [x] Geprüft: Unit-Tests mehrfach, echtes Uno (28/28, Regiepult 48/48), echtes OBS 33.0.3 (127/127,
       Szenen-Zuordnung 20/20)
-- [ ] Frischen Screenshot fürs README machen und als `docs/bildschirmfoto.png` speichern (Kevin)
+- [x] Frische Screenshots im README (Regiepult und Fenster „Shot hinzufügen“, als Pre-Alpha markiert)
 - [ ] Ein Test-Stream mit Countdown durch Kevin
 
 ### Build 1.3

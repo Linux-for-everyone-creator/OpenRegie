@@ -46,7 +46,7 @@ auf, so wie „Add Input“ bei vMix. Rechts bleibt dabei dein Countdown einfach
 - Beim Start am 23.11. war der Passwortspeicher des Systems gesperrt. OpenRegie fand darum kein
   Uno-Projekt (Meldung unter der Bibliothek). Wenn das passiert: das Entsperr-Fenster des Systems
   bestätigen und OpenRegie neu starten.
-- Bitte einen frischen Screenshot fürs README machen und als `docs/bildschirmfoto.png` speichern.
+- Frische Screenshots sind im README (Regiepult und das neue Fenster), als Pre-Alpha markiert.
 
 ## Build 1.2.1 – kleines Update: jede Kachel gehört fest zu ihrer Szene · 22.11.2026
 

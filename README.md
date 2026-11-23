@@ -9,7 +9,9 @@
 
 🇩🇪 [Deutsch](#deutsch) · 🇬🇧 [English](#english)
 
-![OpenRegie – das Regiepult (Build 1.2.2) / the control room (build 1.2.2)](docs/bildschirmfoto.png)
+![OpenRegie – das Regiepult (Pre-Alpha, Build 1.2.2) / the control room (pre-alpha, build 1.2.2)](docs/bildschirmfoto.png)
+*Pre-Alpha · Build 1.2.2 – das Regiepult mit Countdown, Live-Bild, Twitch-Titel und Shots /
+the control room with countdown, live picture, Twitch title and shots*
 
 ---
 
@@ -29,6 +31,12 @@ zum Beispiel mit Joystick, Maus oder nur der Tastatur.
 - **Wenn-dann**: einfache Regeln (z. B. „Wenn der Stream startet → dann Shot ‚Pause‘ live“) und ein Zeitplan.
 - Große Knöpfe, klare Farben, verständliche Meldungen ohne Fachsprache.
 - Alle Farben, Texte und Größen lassen sich in `einstellungen.toml` anpassen.
+
+<img src="docs/shot-hinzufuegen.png" alt="Fenster „Shot hinzufügen“ (Pre-Alpha, Build 1.2.2)" width="450">
+
+*Pre-Alpha · Build 1.2.2 – „Shot hinzufügen“ im eigenen Fenster*
+
+**Lust auf selber ausprobieren?** Dann geht es hier los – denk dran, es ist noch eine Pre-Alpha.
 
 ### Installation unter Linux
 **Voraussetzungen:** Python 3.11 oder neuer, PySide6 (Qt 6), OBS Studio 28 oder neuer
@@ -111,6 +119,12 @@ when using a joystick, a mouse or only the keyboard.
 - **If-then**: simple rules (e.g. "when the stream starts → put shot 'Pause' on air") and a schedule.
 - Big buttons, clear colours, plain-language messages.
 - All colours, texts and sizes are configurable in `einstellungen.toml`.
+
+<img src="docs/shot-hinzufuegen.png" alt="“Add shot” window (pre-alpha, build 1.2.2)" width="450">
+
+*Pre-alpha · build 1.2.2 – “Add shot” in its own window*
+
+**Want to try it yourself?** Start right here – just remember it is still a pre-alpha.
 
 > The user interface is currently **German only**. Translations are very welcome!
 
