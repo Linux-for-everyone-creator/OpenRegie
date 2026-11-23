@@ -96,7 +96,21 @@ Fehlerbericht: Klick auf „Bildschirmaufnahme“ zeigte nur den Countdown.
       „Bildschirm neu auswählen“ (öffnet das Auswahlfenster des Systems noch einmal)
 - [x] Geprüft: Unit-Tests je 12×, echtes OBS 33.0.3 (`werkzeuge/test_zuordnung_mit_echtem_obs.py`,
       5 Szenen) 12 Läufe
-- [ ] Frischen Screenshot fürs README machen (Kevin)
+- [x] ~~Frischen Screenshot fürs README machen~~ → verschoben nach Build 1.2.2
+
+### Build 1.2.2 – Countdown-Korrektur & „Shot hinzufügen“ als eigenes Fenster · *fertig (23.11.2026)*
+Fehlerbericht: Countdown steht auf 00:00 und lässt sich nicht bedienen.
+- [x] Ursache gefunden: Der Uno-Countdown lief seit 16.11. durch und war abgelaufen; „Start“ war dann
+      grau, nur „Zurück“ half – ohne Hinweis. (Nicht durch die Szenen-Korrektur aus 1.2.1.)
+- [x] Abgelaufen: Knopf „▶ Neu starten“ beginnt mit einem Klick von vorn
+- [x] Countdown-Befehle gehen nacheinander zu Uno – keiner überholt den anderen
+- [x] Einblenden nimmt Inhalt und Zahlen wieder mit (Uno meldet im Bauplan jetzt alle Teile als „aus“)
+- [x] „Shot hinzufügen“ / „Quelle hinzufügen“ als eigenes Fenster (wie „Add Input“ bei vMix), sperrt das
+      Regiepult, solange es offen ist; Auswahl und Optionen unverändert; rechts bleibt der Countdown
+- [x] Geprüft: Unit-Tests mehrfach, echtes Uno (28/28, Regiepult 48/48), echtes OBS 33.0.3 (127/127,
+      Szenen-Zuordnung 20/20)
+- [ ] Frischen Screenshot fürs README machen und als `docs/bildschirmfoto.png` speichern (Kevin)
+- [ ] Ein Test-Stream mit Countdown durch Kevin
 
 ### Build 1.3
 - [ ] Lautstärke-Auslöser: Spricht Kevin (Pegel über Schwelle), schaltet OpenRegie auf die Kamera um;

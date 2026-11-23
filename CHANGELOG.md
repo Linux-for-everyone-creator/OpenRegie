@@ -2,6 +2,52 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.2.2 – Countdown wieder flott, „Shot hinzufügen“ im eigenen Fenster · 23.11.2026
+
+**Kurz gesagt:** Der Countdown hing auf 00:00 fest und „Start“ war grau. Das ist jetzt behoben. Und die
+Auswahl „Shot hinzufügen“ (Kamera, Spiel, Reactions, Bildschirm, Bild) poppt jetzt als eigenes Fenster
+auf, so wie „Add Input“ bei vMix. Rechts bleibt dabei dein Countdown einfach stehen.
+
+**Was beim Countdown los war**
+- Der Uno-Countdown lief seit dem **16.11. um 19:28** einfach weiter. Nach 90 Minuten war er durch, und
+  sechs Tage später stand er natürlich auf 00:00. Uno zählt die abgelaufene Zeit weiter hoch, auch
+  wenn längst Schluss ist.
+- OpenRegie hat dann **„Start“ ausgegraut**. Weiter ging es nur über „↺ Zurück“, und das stand nirgends.
+  Darum fühlte es sich an, als ginge gar nichts mehr.
+- Mit der Szenen-Korrektur aus 1.2.1 hatte das nichts zu tun (Zeitpunkt war Zufall). Die Szenen-
+  Zuordnung ist unverändert und mit echtem OBS noch einmal geprüft (20 von 20).
+
+**Behoben / neu**
+- Ist der Countdown abgelaufen, heißt der grüne Knopf **„▶ Neu starten“** und legt mit einem Klick
+  wieder bei der vollen Zeit los. Darunter steht, was Sache ist.
+- Countdown-Befehle gehen jetzt **schön nacheinander** zu Uno. Vorher konnte z. B. „−1 Min“ eine direkt
+  danach eingetippte Zeit überholen, und bei Uno stand dann die falsche Zeit (beim Testen mit dem echten
+  Uno passiert).
+- **Einblenden** schaltet Inhalt und Zahlen wieder sicher mit ein. Uno meldet seit Kurzem alle Teile im
+  Bauplan als „aus“, sonst hätte es nur den Kreis ohne Zahlen gegeben.
+- **„Shot hinzufügen“ und „Quelle hinzufügen“ = eigenes Fenster.** Auswahl und Optionen sind genau wie
+  vorher, auch Reactions. Solange es offen ist, ist das Regiepult gesperrt (nichts geht aus Versehen),
+  läuft aber weiter: Live-Bild, Shot-Bilder und Countdown ticken mit. Zu geht's mit „Abbrechen“, dem
+  Kreuz, Esc oder von selbst, sobald der Shot angelegt ist.
+- Vorher hat „Shot hinzufügen“ rechts den Countdown verdrängt, und die Auswahl in der Bibliothek war weg.
+  Auch das ist damit erledigt.
+
+**Geprüft**
+- Alle Unit-Tests: 278 von 278, viermal hintereinander. Neues OBS-Fenster-Werkzeug 3 Läufe.
+- Echtes Overlays.uno („Countdown | Circles“, `werkzeuge/test_mit_echtem_uno.py`): 28 von 28. Darin
+  auch Kevins Fall (abgelaufen → Neu starten) und drei Runden „schnell hintereinander“.
+- Echtes Regiepult mit echtem Uno: Zeit einstellen, eintippen, bestätigen (✓ und Enter), starten,
+  pausieren, weiter, zurücksetzen, ±1 Min, abgelaufen → Neu starten, Fenster auf/zu: 2 Runden, 48 von 48.
+  Danach steht der Countdown wieder auf 1:30:00 und ist zurückgesetzt.
+- Echtes OBS 33.0.3: neues Fenster (`werkzeuge/test_shot_fenster_mit_echtem_obs.py`, 5 Runden),
+  127 von 127; Szenen-Zuordnung aus 1.2.1 weiter 20 von 20.
+
+**Gut zu wissen**
+- Beim Start am 23.11. war der Passwortspeicher des Systems gesperrt. OpenRegie fand darum kein
+  Uno-Projekt (Meldung unter der Bibliothek). Wenn das passiert: das Entsperr-Fenster des Systems
+  bestätigen und OpenRegie neu starten.
+- Bitte einen frischen Screenshot fürs README machen und als `docs/bildschirmfoto.png` speichern.
+
 ## Build 1.2.1 – kleines Update: jede Kachel gehört fest zu ihrer Szene · 22.11.2026
 
 **Fehlerbericht:** Zwei Szenen „Countdown“ und „Bildschirmaufnahme“ – nach dem Klick auf die

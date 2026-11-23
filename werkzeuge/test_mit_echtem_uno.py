@@ -76,6 +76,36 @@ pruef("Dauer +1 Min", warten(u.dauer_setzen, o, DAUER + 60)[0] is True and o.dau
 pruef("Dauer zurück", warten(u.dauer_setzen, o, DAUER)[0] is True and o.dauer == DAUER, str(o.dauer))
 pruef("Countdown zurück", warten(u.timer_befehl, o, "reset")[0] is True and o.restzeit_ms() == DAUER * 1000,
       einzel.zeit_text(o.restzeit_ms()))
+
+# --- Build 1.2.2: der gemeldete Fehler (Countdown seit Tagen abgelaufen, 00:00, „Start“ ging nicht) ---
+def patch(liste):
+    t_ = urllib.request.Request(f"https://app.overlays.uno/apiv2/controlapps/{t}/control", method="PATCH",
+                                data=json.dumps(liste).encode(), headers={"Content-Type": "application/json"})
+    return json.loads(urllib.request.urlopen(t_, timeout=15).read())
+teil, feld = o.bauplan.timer
+jetzt = int(__import__("time").time() * 1000)
+patch([{"subCompositionId": teil, "payload": {feld: {"UTC": jetzt, "isRunning": False, "value": 520_647_486}}}])
+r = []; u.felder_laden(o, lambda ok, f: r.append(ok)); warte_bis(lambda: r, 15000)
+pruef("Abgelaufen nachgestellt (wie bei Kevin)", o.restzeit_ms() == 0, einzel.zeit_text(o.restzeit_ms()))
+pruef("Neu starten", warten(u.timer_befehl, o, "neu")[0] is True and o.timer.get("isRunning"))
+pruef("  beginnt von vorn", DAUER * 1000 - 3000 <= o.restzeit_ms() <= DAUER * 1000, einzel.zeit_text(o.restzeit_ms()))
+pruef("Pause", warten(u.timer_befehl, o, "pause")[0] is True and not o.timer.get("isRunning"))
+
+# Zwei Änderungen direkt hintereinander: die zweite muss bei Uno gelten (vorher konnte die erste überholen)
+for runde in range(3):
+    r = []
+    u.dauer_setzen(o, DAUER - 60, lambda ok, f: r.append(ok))
+    u.countdown_zeit_setzen(o, 330 + runde, lambda ok, f: r.append(ok))
+    warte_bis(lambda: len(r) == 2, 20000)
+    warte(1500)
+    echt = json.loads(urllib.request.urlopen(f"https://app.overlays.uno/apiv2/controlapps/{t}/control",
+                                             timeout=15).read())
+    begin = next(s_["payload"].get("BeginTime") for s_ in echt if "BeginTime" in s_["payload"])
+    pruef(f"Schnell hintereinander, Runde {runde + 1}: zuletzt Getipptes gilt", r == [True, True]
+          and begin == 330 + runde and o.dauer == 330 + runde, f"Uno {begin}, OpenRegie {o.dauer}")
+pruef("Dauer wieder wie vorher", warten(u.dauer_setzen, o, DAUER)[0] is True and o.dauer == DAUER, str(o.dauer))
+pruef("Countdown zurück", warten(u.timer_befehl, o, "reset")[0] is True and o.restzeit_ms() == DAUER * 1000,
+      einzel.zeit_text(o.restzeit_ms()))
 u.beenden()
 print(f"\n{sum(map(bool, erg))} von {len(erg)} Prüfungen bestanden.  Ende: {roh()}")
 sys.exit(0 if all(erg) else 1)
