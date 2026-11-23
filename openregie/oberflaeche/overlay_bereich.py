@@ -550,7 +550,7 @@ class OverlayBedienfeld(QWidget):
         reihe = QHBoxLayout()
         reihe.setSpacing(g.abstand // 2)
         self.start = knopf(t.knopf_countdown_start, "einblenden")
-        self.start.clicked.connect(lambda: self._timer("play"))
+        self.start.clicked.connect(self._start)
         self.pause = knopf(t.knopf_countdown_pause, "klein")
         self.pause.clicked.connect(lambda: self._timer("pause"))
         self.zurueck = knopf(t.knopf_countdown_reset, "klein")
@@ -694,8 +694,14 @@ class OverlayBedienfeld(QWidget):
         else:
             zustand = t.countdown_bereit
         self.countdown_zustand.setText(zustand)
-        self.start.setEnabled(not laeuft and rest != 0)
-        self.pause.setEnabled(laeuft)
+        # Abgelaufen (Uno meldet ihn dann evtl. weiter als „läuft“): „Start“ beginnt von vorn.
+        # Früher war „Start“ dann grau – und wer nicht an „Zurück“ dachte, kam nicht weiter.
+        abgelaufen = rest == 0
+        start_text = t.knopf_countdown_neu if abgelaufen else t.knopf_countdown_start
+        if self.start.text() != start_text:
+            self.start.setText(start_text)
+        self.start.setEnabled(abgelaufen or not laeuft)
+        self.pause.setEnabled(laeuft and not abgelaufen)
         # Zeit eintippen: gesperrt, solange der Countdown im Stream ist
         gesperrt = self._zeit_gesperrt(o)
         if gesperrt and self.zeit_eingabe.isVisible():
@@ -732,8 +738,6 @@ class OverlayBedienfeld(QWidget):
         o, t = self.overlay, self.E.texte
         if o is None or not o.bereit:
             return t.gesperrt_uno_laedt
-        if o.restzeit_ms() == 0:  # zuerst: Uno meldet einen abgelaufenen Countdown weiter als „läuft“
-            return t.gesperrt_start_abgelaufen
         if o.timer and o.timer.get("isRunning"):
             return t.gesperrt_start_laeuft
         return t.gesperrt_moment
@@ -742,6 +746,8 @@ class OverlayBedienfeld(QWidget):
         o, t = self.overlay, self.E.texte
         if o is None or not o.bereit:
             return t.gesperrt_uno_laedt
+        if o.restzeit_ms() == 0:
+            return t.gesperrt_pause_abgelaufen
         return t.gesperrt_pause
 
     def _grund_dauer(self) -> str:
@@ -873,6 +879,12 @@ class OverlayBedienfeld(QWidget):
         self.meldung_schalter.zeigen("")
         self.uno.timer_befehl(self.overlay, befehl,
                               lambda ok, fehler: self.meldung_schalter.zeigen(fehler, False) if fehler else None)
+
+    def _start(self) -> None:
+        o = self.overlay
+        if o is None:
+            return
+        self._timer("neu" if o.restzeit_ms() == 0 else "play")  # abgelaufen: von vorn
 
     def _dauer(self, schritt: int) -> None:
         o = self.overlay

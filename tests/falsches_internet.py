@@ -28,6 +28,11 @@ class FalschesInternet:
         self.lock = threading.Lock()
         self.anfragen: list[tuple[str, str, object]] = []  # (methode, pfad, inhalt)
         self.verzoegerung = 0.0
+        # Für Rennen zwischen Befehlen: Wartezeit je PATCH in Sekunden (der Reihe nach verbraucht).
+        # [0.6, 0] = der erste PATCH braucht lange, ein gleichzeitig geschickter zweiter würde ihn überholen.
+        self.patch_verzoegerungen: list[float] = []
+        self.patch_gleichzeitig = 0
+        self.patch_hoechstens_gleichzeitig = 0
         self.aus = False  # True = „kein Internet“ (Verbindung wird sofort geschlossen)
 
         # --- Uno ---------------------------------------------------------
@@ -116,6 +121,22 @@ class FalschesInternet:
                     netz.anfragen.append((methode, self.path, inhalt))
                 if netz.verzoegerung:
                     time.sleep(netz.verzoegerung)
+                if methode == "PATCH":
+                    with netz.lock:
+                        warten = netz.patch_verzoegerungen.pop(0) if netz.patch_verzoegerungen else 0.0
+                        netz.patch_gleichzeitig += 1
+                        netz.patch_hoechstens_gleichzeitig = max(netz.patch_hoechstens_gleichzeitig,
+                                                                 netz.patch_gleichzeitig)
+                    try:
+                        if warten:
+                            time.sleep(warten)
+                        return self._bearbeiten_weiter(methode, inhalt)
+                    finally:
+                        with netz.lock:
+                            netz.patch_gleichzeitig -= 1
+                return self._bearbeiten_weiter(methode, inhalt)
+
+            def _bearbeiten_weiter(self, methode, inhalt):
                 if netz.aus:
                     self.close_connection = True
                     self.connection.close()
@@ -276,6 +297,9 @@ class FalschesSingular:
         self.vorschau_adresse = "//image.example/vorschau.jpg"  # wie beim echten: ohne „https:“
         self.name = "Countdown | Circles"
         self.zustand = {HAUPT: "Out1", CONTENT: "Out1", COUNTDOWN: "Out1", MESSAGE: "Out1"}
+        # Seit Ende November 2026 meldet das echte Uno im Bauplan ALLE Teile als „Out“ (vorher Content und
+        # Countdown „In“). Welche Teile zum Einblenden gehören, sieht man dann nur noch am Zustand.
+        self.bauplan_alles_out = False
         self.werte = {
             HAUPT: {"Active": False, "Color": {"r": 42, "g": 42, "b": 42, "a": 1}, "Text": "#ffffff",
                     "Image": "https://assets.example/bild.svg"},
@@ -315,16 +339,17 @@ class FalschesSingular:
 
     def model(self):
         feld = lambda i, art, std=None: {"id": i, "title": i, "type": art, "defaultValue": std}
+        std_in = "Out" if self.bauplan_alles_out else "In"
         return [{"id": HAUPT, "name": "default",
                  "model": [feld("Image", "image"), feld("Color", "color"), feld("Text", "color"),
                            feld("Active", "checkbox", True)],
                  "subcompositions": [{
-                     "id": CONTENT, "name": "Content", "state": "In",
+                     "id": CONTENT, "name": "Content", "state": std_in,
                      "model": [feld("BeginTime", "number", "0"), feld("Timer", "timecontrol"),
                                feld("UseMessage", "checkbox", True), feld("Message", "text", "End"),
                                feld("ShowOverlay", "checkbox", True)],
                      "subcompositions": [
-                         {"id": COUNTDOWN, "name": "Countdown", "state": "In", "model": [], "subcompositions": []},
+                         {"id": COUNTDOWN, "name": "Countdown", "state": std_in, "model": [], "subcompositions": []},
                          {"id": MESSAGE, "name": "Message", "state": "Out", "model": [], "subcompositions": []}]}]}]
 
     def control(self):

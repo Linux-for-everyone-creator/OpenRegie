@@ -218,6 +218,10 @@ class Overlay:
     # Zählt eigene Countdown-Änderungen. Eine Antwort von Uno, die VOR der letzten Änderung angefragt
     # wurde, darf Dauer und Zeitgeber nicht mit dem alten Stand überschreiben (sonst springt die Zeit kurz zurück).
     countdown_stand: int = 0
+    # Countdown-Befehle gehen NACHEINANDER zu Uno (sonst kann ein späterer Befehl einen früheren überholen,
+    # z. B. „−1 Min“ und gleich danach eine eingetippte Zeit – dann gilt bei Uno die falsche Zeit).
+    countdown_schlange: list = field(default_factory=list)
+    countdown_unterwegs: bool = False
     bild_daten: bytes | None = None  # geladenes Vorschaubild (b"" = keins)
     # Funktionen, die dieses Uno nicht kann (Uno sagt „Invalid command“): werden still ausgegraut
     nicht_unterstuetzt: set = field(default_factory=set)
@@ -433,6 +437,7 @@ class UnoVerwaltung(QObject):
             if not ok:
                 fertig(None, fehler, art)
                 return
+            einzel.ein_teile_ergaenzen(plan, daten)
             overlay.bauplan = plan  # erst jetzt: vorher gilt das Overlay als „wird geladen“
             self._zustand_uebernehmen(overlay, daten)
             self.overlay_geaendert.emit(overlay)
@@ -723,14 +728,18 @@ class UnoVerwaltung(QObject):
 
     # --- Countdown (nur Einzel-Unos mit Zeitgeber) ---------------------------
     def timer_befehl(self, overlay: Overlay, befehl: str, fertig=None) -> None:
-        """befehl: "play" (Start/Weiter), "pause" oder "reset" (zurück auf die volle Dauer)."""
+        """befehl: "play" (Start/Weiter), "pause", "reset" (zurück auf die volle Dauer) oder
+        "neu" (abgelaufener Countdown: zurücksetzen und gleich wieder starten)."""
         plan = overlay.bauplan
         if plan is None or plan.timer is None:
             self._noch_nicht_bereit(fertig)
             return
         teil, feld = plan.timer
-        self._aendern_und_lesen(overlay, [{"subCompositionId": teil, "payload": {feld: {"command": befehl}}}],
-                                fertig, COUNTDOWN)
+        befehle = ["reset", "play"] if befehl == "neu" else [befehl]
+        overlay.countdown_stand += 1  # ältere Antworten von Uno sollen das nicht zurückdrehen
+        mein_stand = overlay.countdown_stand
+        self._countdown_einreihen(overlay, [[{"subCompositionId": teil, "payload": {feld: {"command": b}}}]
+                                            for b in befehle], mein_stand, fertig)
 
     def dauer_setzen(self, overlay: Overlay, sekunden: int, fertig=None) -> None:
         plan = overlay.bauplan
@@ -741,9 +750,10 @@ class UnoVerwaltung(QObject):
         teil, feld = plan.dauer
         overlay.dauer = sekunden  # sofort anzeigen, Uno bestätigt gleich
         overlay.countdown_stand += 1  # ältere Antworten von Uno sollen das nicht zurückdrehen
+        mein_stand = overlay.countdown_stand
         self.overlay_geaendert.emit(overlay)
-        self._aendern_und_lesen(overlay, [{"subCompositionId": teil, "payload": {feld: sekunden}}], fertig,
-                                COUNTDOWN)
+        self._countdown_einreihen(overlay, [[{"subCompositionId": teil, "payload": {feld: sekunden}}]], mein_stand,
+                                  fertig)
 
     def countdown_zeit_setzen(self, overlay: Overlay, sekunden: int, fertig=None) -> None:
         """Eingetippte Zeit: Dauer setzen – und hat der Countdown schon gezählt, ihn im selben
@@ -772,33 +782,51 @@ class UnoVerwaltung(QObject):
             overlay.timer = dict(overlay.timer, value=0, isRunning=False)
         self.overlay_geaendert.emit(overlay)
 
-        def geaendert(ok, _daten, fehler, art):
-            if not ok:
-                # Uno hat die neue Zeit nicht angenommen: wieder den alten Stand zeigen
-                fehler = self._aktion_fehlgeschlagen(overlay, COUNTDOWN, fehler, art)
-                if overlay.countdown_stand == mein_stand:  # nur, wenn seitdem nichts anderes geändert wurde
-                    overlay.dauer, overlay.timer = vorher
-                    self.overlay_geaendert.emit(overlay)
-                if fertig:
-                    fertig(False, fehler)
+        def abgelehnt():
+            # Uno hat die neue Zeit nicht angenommen: wieder den alten Stand zeigen
+            if overlay.countdown_stand == mein_stand:  # nur, wenn seitdem nichts anderes geändert wurde
+                overlay.dauer, overlay.timer = vorher
+                self.overlay_geaendert.emit(overlay)
+
+        self._countdown_einreihen(overlay, [befehl], mein_stand, fertig, abgelehnt)
+
+    def _countdown_einreihen(self, overlay: Overlay, patches: list, mein_stand: int, fertig, abgelehnt=None) -> None:
+        """Countdown-Änderung in die Warteschlange des Overlays: Die PATCHes gehen nacheinander zu Uno,
+        danach wird der echte Stand gelesen (Uno setzt z. B. die Startzeit selbst). Erst dann kommt
+        die nächste Änderung an die Reihe."""
+        overlay.countdown_schlange.append((list(patches), mein_stand, fertig, abgelehnt))
+        if not overlay.countdown_unterwegs:
+            self._countdown_naechster(overlay)
+
+    def _countdown_naechster(self, overlay: Overlay) -> None:
+        if not overlay.countdown_schlange:
+            overlay.countdown_unterwegs = False
+            return
+        overlay.countdown_unterwegs = True
+        patches, mein_stand, fertig, abgelehnt = overlay.countdown_schlange.pop(0)
+
+        def erledigt(ok, fehler):
+            if fertig:
+                fertig(ok, fehler)
+            self._countdown_naechster(overlay)
+
+        def senden(rest):
+            if not rest:
+                self.felder_laden(overlay, erledigt, mein_stand)  # angenommen: echten Stand von Uno lesen
                 return
-            self.felder_laden(overlay, fertig, mein_stand)  # angenommen: echten Stand von Uno lesen
 
-        self._singular(overlay.projekt, "PATCH", "/control", befehl, geaendert)
+            def geaendert(ok, _daten, fehler, art):
+                if not ok:
+                    fehler = self._aktion_fehlgeschlagen(overlay, COUNTDOWN, fehler, art)
+                    if abgelehnt:
+                        abgelehnt()
+                    erledigt(False, fehler)
+                    return
+                senden(rest[1:])
 
-    def _aendern_und_lesen(self, overlay: Overlay, befehl: list, fertig, funktion: str) -> None:
-        """PATCH schicken, danach den neuen Stand lesen (Uno setzt z. B. die Startzeit selbst)."""
-        stand_beim_start = overlay.countdown_stand
+            self._singular(overlay.projekt, "PATCH", "/control", rest[0], geaendert)
 
-        def geaendert(ok, _daten, fehler, art):
-            if not ok:
-                fehler = self._aktion_fehlgeschlagen(overlay, funktion, fehler, art)
-                if fertig:
-                    fertig(False, fehler)
-                return
-            self.felder_laden(overlay, fertig, stand_beim_start)
-
-        self._singular(overlay.projekt, "PATCH", "/control", befehl, geaendert)
+        senden(patches)
 
     def bild_laden(self, overlay: Overlay, fertig) -> None:
         """Kleines Vorschaubild von Uno holen. fertig(bytes | None). Wird pro Overlay gemerkt."""

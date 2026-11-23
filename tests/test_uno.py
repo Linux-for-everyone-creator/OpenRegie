@@ -9,7 +9,7 @@ from openregie.uno.verwaltung import (KEIN_INTERNET, NICHT_GEFUNDEN, SONSTIGER_F
                                       UnoVerwaltung, felder_lesen, fehlerart, ist_textfeld, overlays_lesen,
                                       sichtbarkeit_lesen, token_aus_text)
 
-from .falsches_internet import (CONTENT, EINZEL_ADRESSE_TEXT, EINZEL_TOKEN, HAUPT, MESSAGE, UNO_ADRESSE_TEXT,
+from .falsches_internet import (CONTENT, COUNTDOWN, EINZEL_ADRESSE_TEXT, EINZEL_TOKEN, HAUPT, MESSAGE, UNO_ADRESSE_TEXT,
                                 UNO_TOKEN, FalschesInternet)
 from .hilfen import app, internet_einstellungen, warte, warte_bis
 
@@ -275,6 +275,64 @@ class VerwaltungTest(unittest.TestCase):
         self.assertEqual(self.netz.einzel.was_man_sieht(), "nichts")
         # kein „ShowOverlay“ über …/api – das zeigt beim echten Einzel-Uno nichts an
         self.assertEqual([d["command"] for d in self.api_befehle_einzel()], ["GetOverlays"])
+
+    def test_einzel_uno_bauplan_alles_out(self):
+        """Seit Ende Nov. 2026 meldet das echte Uno im Bauplan alle Teile als „Out“. Einblenden muss trotzdem
+        Content und Countdown mitnehmen (die beim Lesen auf „In“ standen) – sonst nur Kreise ohne Zahlen."""
+        e = self.netz.einzel
+        e.bauplan_alles_out = True
+        e.zustand.update({HAUPT: "Out2", CONTENT: "In", COUNTDOWN: "In"})  # so stand Kevins Uno da
+        self.hinzufuegen(EINZEL_ADRESSE_TEXT)
+        o = self.einzel()
+        self.assertEqual(o.bauplan.ein_teile, [HAUPT, CONTENT, COUNTDOWN])
+        e.zustand.update({CONTENT: "Out2", COUNTDOWN: "Out2"})  # z. B. in Uno selbst umgestellt
+        self.uno.umschalten(o)
+        self.assertTrue(warte_bis(lambda: o.sichtbar is True, 3000))
+        self.assertTrue(e.komplett_sichtbar(), e.zustand)
+        self.assertEqual(e.zustand[MESSAGE], "Out1")  # Endtext-Teil bleibt aus
+
+    def test_countdown_befehle_ueberholen_sich_nicht(self):
+        """„−1 Min“ und gleich danach eine eingetippte Zeit: Bei Uno muss die eingetippte Zeit gelten,
+        auch wenn der erste Befehl im Netz länger braucht (mit dem echten Uno so passiert, 23.11.2026)."""
+        e = self.netz.einzel
+        self.hinzufuegen(EINZEL_ADRESSE_TEXT)
+        o = self.einzel()
+        self.netz.patch_verzoegerungen = [0.6, 0.0, 0.0]
+        fertig = []
+        self.uno.dauer_setzen(o, 240, lambda ok, f: fertig.append(ok))
+        self.uno.countdown_zeit_setzen(o, 5400, lambda ok, f: fertig.append(ok))
+        self.uno.timer_befehl(o, "play", lambda ok, f: fertig.append(ok))
+        self.assertEqual(o.dauer, 5400)  # sofort angezeigt
+        self.assertTrue(warte_bis(lambda: len(fertig) == 3, 5000))
+        self.assertEqual(fertig, [True, True, True])
+        self.assertEqual(e.werte[CONTENT]["BeginTime"], 5400)
+        self.assertTrue(e.werte[CONTENT]["Timer"]["isRunning"])
+        self.assertEqual(o.dauer, 5400)
+        self.assertTrue(o.timer["isRunning"])
+        self.assertEqual(self.netz.patch_hoechstens_gleichzeitig, 1)  # nie zwei Befehle gleichzeitig
+        warte(1500)  # auch die regelmäßige Abfrage dreht nichts zurück
+        self.assertEqual(o.dauer, 5400)
+
+    def test_abgelaufen_neu_starten(self):
+        """Der gemeldete Fehler: Countdown lief seit Tagen, stand auf 00:00 und „Start“ ging nicht."""
+        e = self.netz.einzel
+        e.jetzt = 2_000_000_000
+        e.werte[CONTENT]["BeginTime"] = 5400
+        e.werte[CONTENT]["Timer"] = {"value": 520_647_486, "UTC": e.jetzt - 1000, "isRunning": False}
+        self.hinzufuegen(EINZEL_ADRESSE_TEXT)
+        o = self.einzel()
+        self.assertEqual(o.restzeit_ms(e.jetzt), 0)
+        fertig = []
+        self.uno.timer_befehl(o, "neu", lambda ok, f: fertig.append(ok))
+        self.assertTrue(warte_bis(lambda: fertig, 3000))
+        self.assertEqual(fertig, [True])
+        self.assertTrue(o.timer["isRunning"])
+        self.assertEqual(o.restzeit_ms(e.jetzt), 5_400_000)  # von vorn
+        self.assertEqual(e.restzeit_s(), 5400)
+        # zwei Befehle in genau dieser Reihenfolge: erst zurück, dann los
+        befehle = [d["PATCH"][0]["payload"]["Timer"]["command"] for d in self.netz.einzel_befehle
+                   if "PATCH" in d and "Timer" in d["PATCH"][0].get("payload", {})]
+        self.assertEqual(befehle[-2:], ["reset", "play"])
 
     def test_einzel_uno_texte(self):
         self.hinzufuegen(EINZEL_ADRESSE_TEXT)

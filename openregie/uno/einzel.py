@@ -101,6 +101,17 @@ def bauplan_lesen(model) -> Bauplan | None:
     return plan
 
 
+def ein_teile_ergaenzen(plan: Bauplan, control) -> None:
+    """Steht im Bauplan KEIN Teil von Haus aus auf „In“ (so meldet es Uno seit Ende November 2026 auch
+    beim „Countdown | Circles“), gehören die Teile zum Einblenden, die beim ersten Lesen auf „In“ standen.
+    Sonst blendet „Einblenden“ nur den Kreis ohne Zahlen ein."""
+    if len(plan.ein_teile) > 1:
+        return
+    for kennung, teil in teile_lesen(control).items():
+        if kennung not in plan.ein_teile and teil["state"].lower() == "in":
+            plan.ein_teile.append(kennung)
+
+
 def teile_lesen(control) -> dict[str, dict]:
     """GET …/control → {Teil-Kennung: {"state": …, "payload": {…}}}."""
     teile = {}

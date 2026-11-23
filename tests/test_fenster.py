@@ -616,19 +616,18 @@ class EinzelUnoFensterTest(Grundlage):
         klick(self.b.dauer_knoepfe[60])  # 5:00 → 6:00, Antwort von Uno hängt
         self.assertTrue(warte_bis(lambda: gehalten, 3000))
         self.tippen("2:00")  # inzwischen getippt
-        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 120, 3000))
-        self.assertTrue(warte_bis(lambda: o.dauer == 120, 3000))
+        self.assertEqual(o.dauer, 120)  # sofort angezeigt …
+        self.assertEqual(self.b.zeit.text(), "02:00")
         self.uno._abfrage.stop()  # nur die späte Antwort prüfen, nicht die regelmäßige Abfrage
-        warte(100)
-        # Die späte Antwort kommt an; ihr Nachlesen sieht bei Uno noch den Stand von „+1 Min“
-        self.e.werte[CONTENT]["BeginTime"] = 360
-        anfragen = len(self.netz.anfragen)
-        gehalten.pop()()
-        self.assertTrue(warte_bis(lambda: len(self.netz.anfragen) > anfragen, 3000))  # Nachlesen ist raus
-        warte(200)
+        warte(300)
+        # … aber erst geschickt, wenn Uno „+1 Min“ beantwortet hat: Befehle überholen sich nie (Build 1.2.2)
+        self.assertEqual(self.e.werte[CONTENT]["BeginTime"], 360)
+        self.assertEqual(o.dauer, 120)  # das Nachlesen der Abfrage dreht nichts zurück
+        gehalten.pop()()  # die späte Antwort kommt an
+        self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 120, 3000))
+        self.assertTrue(warte_bis(lambda: not o.countdown_unterwegs, 3000))
         self.assertEqual(o.dauer, 120)  # nicht zurückgedreht
         self.assertEqual(self.b.zeit.text(), "02:00")
-        self.e.werte[CONTENT]["BeginTime"] = 120
         klick(self.b.dauer_knoepfe[-60])  # rechnet mit 2:00 weiter
         self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 60, 3000))
 
@@ -958,11 +957,21 @@ class GesperrteKnoepfeTest(Grundlage):
         self.assertTrue(warte_bis(lambda: self.e.werte[CONTENT]["BeginTime"] == 1, 3000))
         klick(self.b.start)
         self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_abgelaufen, 4000))
-        self.assertFalse(self.b.start.isEnabled())
-        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.start), t.gesperrt_start_abgelaufen)
-        QTest.mouseClick(self.b.start, Qt.MouseButton.LeftButton)
-        self.assertEqual(self.b.meldung_zeit.text(), t.gesperrt_start_abgelaufen)
+        # Früher war „Start“ jetzt grau (gemeldeter Fehler: Countdown stand auf 00:00 und ließ sich nicht
+        # bedienen). Jetzt heißt er „Neu starten“ und beginnt von vorn.
+        self.assertEqual(self.b.zeit.text(), "00:00")
+        self.assertTrue(self.b.start.isEnabled())
+        self.assertEqual(self.b.start.text(), t.knopf_countdown_neu)
+        self.assertFalse(self.b.pause.isEnabled())
+        self.assertEqual(self.hinweis_beim_drueberfahren(self.b.pause), t.gesperrt_pause_abgelaufen)
         self.alle_gesperrten_sagen_warum("abgelaufen")
+        self.e.werte[CONTENT]["BeginTime"] = 300  # damit er nicht gleich wieder abläuft
+        self.b.overlay.dauer = 300
+        klick(self.b.start)
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_laeuft, 3000))
+        self.assertIn(self.b.zeit.text(), ("05:00", "04:59"))
+        self.assertEqual(self.b.start.text(), t.knopf_countdown_start)
+        self.assertTrue(self.b.pause.isEnabled())
 
     def test_dauer_knoepfe_ohne_dauer(self):
         self.b.overlay.bauplan.dauer = ""
