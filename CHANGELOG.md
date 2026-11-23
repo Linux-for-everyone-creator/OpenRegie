@@ -86,6 +86,7 @@ Aber die Bildschirmaufnahme lieferte kein Bild – der Bildschirm war im Auswahl
 - Das Uno-Overlay liegt weiter in jedem Shot. Einstellbar, in welchen Shots es liegt, wird es in Build 1.3.
 - Bitte einen frischen Screenshot fürs README machen.
 
+## Build 1.2 – Shots & Wenn-dann · 22.11.2026
 
 **Neu: Shots (wie bei Wirecast)**
 - Unter dem Live-Bild stehen alle Szenen aus OBS als große Kacheln mit kleinem Vorschaubild.
