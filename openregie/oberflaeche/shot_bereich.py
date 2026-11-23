@@ -17,13 +17,14 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import (QAbstractButton, QButtonGroup, QFileDialog, QGridLayout, QHBoxLayout, QLineEdit,
-                               QSizePolicy, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractButton, QButtonGroup, QDialog, QFileDialog, QGridLayout, QHBoxLayout,
+                               QLineEdit, QSizePolicy, QVBoxLayout, QWidget)
 
 from ..obs import vorlagen
 from ..obs.quellen import ObsQuellen, Shot
 from .bausteine import Lampe, beschriftung, gesperrt_hinweis, knopf
 from .overlay_bereich import _leeren, _scrollflaeche, meldung
+from .stil import stylesheet
 
 
 def _fest(k, breite: int | None = None):
@@ -1108,3 +1109,45 @@ class ShotNeu(QWidget):
     def _name_aus(text: str) -> str:
         """Aus „Der Shot „X“ ist da – …“ den Namen X holen (Meldung „ohne Kamera“)."""
         return text.split("„", 1)[1].split("“", 1)[0] if "„" in text else text
+
+
+# ---------------------------------------------------------------------------
+#  Eigenes Fenster für „Shot hinzufügen“ / „Quelle hinzufügen“ (ab Build 1.2.2)
+# ---------------------------------------------------------------------------
+class ShotNeuFenster(QDialog):
+    """Wie „Add Input“ bei vMix: Die Auswahl (Kamera, Spiel, Reactions, Bildschirm, Bild – dann das Layout)
+    geht als eigenes Fenster auf. Rechts im Regiepult bleibt dabei alles, wie es war (z. B. der Countdown).
+
+    Solange es offen ist, ist das Regiepult gesperrt – nichts wird aus Versehen angeklickt. Es läuft aber
+    weiter (kein eigener Warte-Kreis, Bilder und Countdown laufen mit). Zu geht es mit „Abbrechen“, dem
+    Kreuz oben, Esc – oder von selbst, sobald der Shot angelegt ist.
+    """
+
+    def __init__(self, E, shot_neu: ShotNeu, parent=None):
+        super().__init__(parent)
+        self.E = E
+        self.shot_neu = shot_neu
+        t, g = E.texte, E.groessen
+        self.setWindowTitle(t.shot_neu_fenster_titel)
+        self.setStyleSheet(stylesheet(E) + f"QDialog {{ background-color: {E.farben.hintergrund}; }}")
+        self.setModal(True)
+        self.resize(int(g.shot_neu_fenster_breite), int(g.shot_neu_fenster_hoehe))
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(g.abstand * 2, g.abstand * 2, g.abstand * 2, g.abstand * 2)
+        lay.addWidget(shot_neu)
+        shot_neu.zurueck.setText(t.knopf_abbrechen)  # im eigenen Fenster heißt „Zurück“ „Abbrechen“
+        self.rejected.connect(self._abgebrochen)  # Kreuz oben oder Esc
+
+    def oeffnen(self) -> None:
+        t = self.E.texte
+        self.setWindowTitle(t.quelle_neu_fenster_titel if self.shot_neu.modus == "quelle" else t.shot_neu_fenster_titel)
+        self.open()  # gesperrt, aber ohne eigene Warteschleife: das Regiepult läuft weiter
+        self.raise_()
+        self.activateWindow()
+
+    def schliessen(self) -> None:
+        if self.isVisible():
+            self.accept()  # „accepted“, nicht „rejected“: meldet nicht noch einmal „abgebrochen“
+
+    def _abgebrochen(self) -> None:
+        self.shot_neu.fertig.emit("")

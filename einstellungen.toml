@@ -183,6 +183,9 @@ schrift_kachel_zeit = 34
 schrift_countdown = 64
 # Shot-Kacheln unten (Höhe des Bildes, ohne Name)
 shot_kachel_hoehe = 108
+# Eigenes Fenster „Shot hinzufügen“ / „Quelle hinzufügen“ (ab Build 1.2.2, wie „Add Input“ bei vMix)
+shot_neu_fenster_breite = 900
+shot_neu_fenster_hoehe = 760
 # Mindestbreite einer Shot-Kachel: so viele passen nebeneinander, weitere mit ◀ ▶ blättern
 shot_kachel_breite = 170
 # Quellen-Kacheln rechts unter „AUSGEWÄHLT“
@@ -378,7 +381,9 @@ knopf_quelle_hinzufuegen = "+  Quelle hinzufügen"
 knopf_name_ok = "✓"
 knopf_name_weg = "✕"
 quelle_ausgewaehlt = "Ausgewählte Quelle: {name}"
-# Shot hinzufügen: 1. Zweck, 2. Layout
+# Shot hinzufügen: 1. Zweck, 2. Layout – öffnet als eigenes Fenster (sperrt das Regiepult, bis es zu ist)
+shot_neu_fenster_titel = "OpenRegie – Shot hinzufügen"
+quelle_neu_fenster_titel = "OpenRegie – Quelle hinzufügen"
 shot_neu_schritt_zweck = "1. Wofür ist der Shot?"
 shot_neu_schritt_layout = "2. Wie soll es aussehen? (gelb = deine Kamera)"
 shot_neu_quelle_art = "Was soll in den Shot?"

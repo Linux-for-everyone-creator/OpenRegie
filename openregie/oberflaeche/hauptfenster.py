@@ -34,7 +34,7 @@ from ..twitch.konto import TwitchKonto
 from ..uno.verwaltung import UnoVerwaltung
 from .bausteine import Logo, OnAirLicht, VerbindungsAnzeige, VorschauBild, beschriftung, flaeche, knopf
 from .overlay_bereich import Bibliothek, OverlayBedienfeld, UnoEinrichtung
-from .shot_bereich import ShotBedienfeld, ShotLeiste, ShotNeu
+from .shot_bereich import ShotBedienfeld, ShotLeiste, ShotNeu, ShotNeuFenster
 from .stil import stylesheet
 from .twitch_bereich import TwitchBereich
 from .wenn_dann import WennDannFenster, WennDannKnopf, naechster_text
@@ -185,9 +185,10 @@ class Hauptfenster(QMainWindow):
         self.bedienfelder.addWidget(self.uno_einrichtung)
         self.bedienfelder.addWidget(self.overlay_bedienfeld)
         self.shot_bedienfeld = ShotBedienfeld(E, self.quellen)
-        self.shot_neu = ShotNeu(E, self.quellen)
         self.bedienfelder.addWidget(self.shot_bedienfeld)
-        self.bedienfelder.addWidget(self.shot_neu)
+        # „Shot hinzufügen“ / „Quelle hinzufügen“: eigenes Fenster (ab Build 1.2.2) – rechts bleibt der Countdown
+        self.shot_neu = ShotNeu(E, self.quellen)
+        self.shot_neu_fenster = ShotNeuFenster(E, self.shot_neu, self)
         rl.addWidget(self.bedienfelder)
         reihe.addWidget(rechts)
 
@@ -282,16 +283,16 @@ class Hauptfenster(QMainWindow):
         self.bedienfelder.setCurrentWidget(self.shot_bedienfeld)
 
     def _shot_neu(self) -> None:
-        self.bibliothek.auswahl_aufheben()
-        self.shot_leiste.gewaehlt_setzen(None)
+        """„+“ in der Shot-Leiste: eigenes Fenster. Rechts bleibt, was war (z. B. der Countdown)."""
         self.shot_neu.shot_zeigen()
-        self.bedienfelder.setCurrentWidget(self.shot_neu)
+        self.shot_neu_fenster.oeffnen()
 
     def _quelle_neu(self, shot: str) -> None:
         self.shot_neu.quelle_zeigen(shot)
-        self.bedienfelder.setCurrentWidget(self.shot_neu)
+        self.shot_neu_fenster.oeffnen()
 
     def _shot_neu_fertig(self, name: str) -> None:
+        self.shot_neu_fenster.schliessen()
         if name and self.shot_neu.modus == "quelle":
             self._shot_bearbeiten(name)
         elif name:
@@ -299,14 +300,11 @@ class Hauptfenster(QMainWindow):
             self.shot_leiste.bearbeiten_setzen(True)
             self.shot_leiste.gewaehlt_setzen(name)
             self._shot_bearbeiten(name)
-        elif self.shot_leiste.bearbeiten and self.shot_bedienfeld.shot_name:
-            self.bedienfelder.setCurrentWidget(self.shot_bedienfeld)
-        else:
-            self._shots_fertig()
+        # abgebrochen: nichts zu tun – rechts hat sich nichts geändert
 
     def _shots_fertig(self) -> None:
         """Bearbeiten beendet: rechts wieder das Overlay."""
-        if self.bedienfelder.currentWidget() in (self.shot_bedienfeld, self.shot_neu):
+        if self.bedienfelder.currentWidget() is self.shot_bedienfeld:
             self._zurueck_zur_auswahl()
 
     # --- Overlays ---------------------------------------------------------
@@ -408,6 +406,7 @@ class Hauptfenster(QMainWindow):
 
     def closeEvent(self, e):
         if self._schliessen_erlaubt:
+            self.shot_neu_fenster.reject()  # offenes „Shot hinzufügen“ geht mit zu
             e.accept()
             return
         if self._stoppt_fuer_ende:
@@ -424,6 +423,7 @@ class Hauptfenster(QMainWindow):
             self._stopp_uhr.start(STREAM_STOPP_WARTEN_MS)
             e.ignore()
             return
+        self.shot_neu_fenster.reject()  # offenes „Shot hinzufügen“ geht mit zu
         e.accept()
 
     def _endgueltig_schliessen(self) -> None:

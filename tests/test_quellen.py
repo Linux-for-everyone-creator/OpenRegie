@@ -427,11 +427,33 @@ class ShotFensterTest(Grundlage):
         self.assertFalse(b.standbilder.laeuft)
         self.assertFalse(b.isVisible())
 
+    def fenster_offen(self):
+        """„Shot hinzufügen“ ist ein eigenes Fenster (Build 1.2.2) – und sperrt das Regiepult."""
+        w = self.f.shot_neu_fenster
+        self.assertTrue(warte_bis(lambda: w.isVisible(), 2000))
+        self.assertTrue(w.isWindow())  # eigenes Fenster, nicht rechts im Regiepult
+        self.assertTrue(w.isModal())
+        self.assertIs(QApplication.activeModalWidget(), w)
+        self.assertIs(self.f.shot_neu.window(), w)
+        self.assertEqual(self.f.bedienfelder.indexOf(self.f.shot_neu), -1)
+        return w
+
+    def fenster_zu(self):
+        w = self.f.shot_neu_fenster
+        self.assertTrue(warte_bis(lambda: not w.isVisible(), 3000))
+        self.assertIsNone(QApplication.activeModalWidget())
+
     def test_shot_hinzufuegen(self):
         t = self.E.texte
+        vorher = self.f.bedienfelder.currentWidget()
         klick(self.l.plus)
         n = self.f.shot_neu
-        self.assertIs(self.f.bedienfelder.currentWidget(), n)
+        w = self.fenster_offen()
+        self.assertEqual(w.windowTitle(), t.shot_neu_fenster_titel)
+        self.assertIs(self.f.bedienfelder.currentWidget(), vorher)  # rechts bleibt, was war
+        # Alle Wahlmöglichkeiten wie bisher – auch Reactions
+        self.assertEqual(set(n.zweck_knoepfe), set(vorlagen.ZWECKE))
+        self.assertIn("reactions", n.zweck_knoepfe)
         self.assertFalse(n.anlegen.isEnabled())  # Zweck ist Pflicht
         from openregie.oberflaeche.bausteine import gesperrt_text
         self.assertEqual(gesperrt_text(n.anlegen), t.gesperrt_zweck_fehlt)
@@ -442,12 +464,55 @@ class ShotFensterTest(Grundlage):
         klick(n.layout_knoepfe["kamera_links_unten"])
         klick(n.anlegen)
         self.assertTrue(warte_bis(lambda: "Reactions" in self.obs.szenen, 3000))
+        self.fenster_zu()  # geht nach dem Anlegen von selbst zu
         self.assertTrue(warte_bis(lambda: self.f.bedienfelder.currentWidget() is self.f.shot_bedienfeld, 3000))
         self.assertEqual(self.f.shot_bedienfeld.shot_name, "Reactions")
         self.assertTrue(warte_bis(lambda: self.l.kachel("Reactions") is not None, 3000))
         self.assertEqual(self.obs.szene, "Szene 1")  # nicht einfach live geschaltet
         ids = {n_: k for k, n_, _ in self.obs.szenen["Reactions"]}
         self.assertLess(self.obs.transform[ids["Kamerabild"]]["positionX"], 1280 / 2)  # links unten
+
+    def test_fenster_abbrechen_auf_drei_wegen(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        t = self.E.texte
+        n = self.f.shot_neu
+        for weg in ("knopf", "esc", "kreuz"):
+            vorher = self.f.bedienfelder.currentWidget()
+            szenen = set(self.obs.szenen)
+            klick(self.l.plus)
+            w = self.fenster_offen()
+            self.assertEqual(n.zurueck.text(), t.knopf_abbrechen)
+            self.assertGreaterEqual(n.zurueck.height(), self.E.groessen.knopf_hoehe)
+            klick(n.zweck_knoepfe["kamera"])
+            if weg == "knopf":
+                klick(n.zurueck)
+            elif weg == "esc":
+                QTest.keyClick(w, Qt.Key.Key_Escape)
+            else:
+                w.close()
+            self.fenster_zu()
+            self.assertIs(self.f.bedienfelder.currentWidget(), vorher, weg)
+            warte(200)
+            self.assertEqual(set(self.obs.szenen), szenen, weg)  # nichts angelegt
+        # wieder öffnen: frisch, ohne alte Auswahl
+        klick(self.l.plus)
+        self.fenster_offen()
+        self.assertIsNone(n.zweck)
+        self.assertFalse(n.anlegen.isEnabled())
+        klick(n.zurueck)
+        self.fenster_zu()
+
+    def test_regiepult_laeuft_weiter_waehrend_fenster_offen(self):
+        """Gesperrt heißt nicht eingefroren: Live-Bild und Shot-Bilder laufen weiter."""
+        klick(self.l.plus)
+        self.fenster_offen()
+        n = self.bild_anfragen()
+        pause = groesste_pause_ms(1200)
+        self.assertLess(pause, 150)
+        self.assertGreater(self.bild_anfragen(), n)  # Bilder werden weiter geholt
+        klick(self.f.shot_neu.zurueck)
+        self.fenster_zu()
 
     def test_bild_ohne_datei(self):
         klick(self.l.plus)
@@ -468,9 +533,14 @@ class ShotFensterTest(Grundlage):
         klick(self.f.shot_bedienfeld.knopf_quelle_neu)
         n = self.f.shot_neu
         self.assertEqual(n.modus, "quelle")
+        w = self.fenster_offen()
+        self.assertEqual(w.windowTitle(), self.E.texte.quelle_neu_fenster_titel)
+        self.assertIs(self.f.bedienfelder.currentWidget(), self.f.shot_bedienfeld)  # rechts bleibt der Shot
+        self.assertEqual(tuple(n.art_knoepfe), vorlagen.ARTEN_ZUM_HINZUFUEGEN)  # Auswahl wie bisher
         klick(n.art_knoepfe["kamera"])
         klick(n.anlegen)
         self.assertTrue(warte_bis(lambda: self.obs.reihenfolge("Pause") == ["Kamerabild"], 3000))
+        self.fenster_zu()
         self.assertTrue(warte_bis(lambda: self.f.bedienfelder.currentWidget() is self.f.shot_bedienfeld, 3000))
         self.assertTrue(warte_bis(lambda: self.f.shot_bedienfeld.kachel("Kamerabild") is not None, 3000))
 

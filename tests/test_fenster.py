@@ -275,6 +275,30 @@ class EinzelUnoFensterTest(Grundlage):
         self.assertTrue(warte_bis(lambda: self.b.zeit.text() == "05:00", 3000))
         self.assertEqual(self.b.countdown_zustand.text(), t.countdown_bereit)
 
+    def test_shot_hinzufuegen_nimmt_den_countdown_nicht_weg(self):
+        """Build 1.2.2: „Shot hinzufügen“ ist ein eigenes Fenster. Vorher ersetzte es rechts den Countdown,
+        und die Auswahl in der Bibliothek war weg – danach war der Countdown nicht mehr zu bedienen."""
+        t = self.E.texte
+        klick(self.b.start)
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_laeuft, 3000))
+        k = self.kachel("Countdown | Circles")
+        self.f._shot_neu()  # wie Klick auf „+“ unten
+        w = self.f.shot_neu_fenster
+        self.assertTrue(w.isVisible() and w.isWindow() and w.isModal())
+        self.assertIs(self.f.bedienfelder.currentWidget(), self.b)  # rechts bleibt der Countdown
+        self.assertTrue(self.b.countdown.isVisible())
+        self.assertTrue(k.isChecked())  # Auswahl bleibt
+        vorher = self.b.zeit.text()
+        warte(1300)
+        self.assertNotEqual(self.b.zeit.text(), vorher)  # zählt im Hintergrund weiter
+        klick(self.f.shot_neu.zurueck)  # Abbrechen
+        self.assertTrue(warte_bis(lambda: not w.isVisible(), 2000))
+        self.assertIs(self.f.bedienfelder.currentWidget(), self.b)
+        klick(self.b.pause)  # gleich wieder bedienbar
+        self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_pausiert, 3000))
+        klick(self.b.zurueck)
+        self.assertTrue(warte_bis(lambda: self.b.zeit.text() == "05:00", 3000))
+
     def test_dauer_einstellen(self):
         klick(self.b.dauer_knoepfe[600])
         self.assertEqual(self.b.zeit.text(), "15:00")  # sofort sichtbar
