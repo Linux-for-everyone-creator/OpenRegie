@@ -9,9 +9,9 @@
 
 🇩🇪 [Deutsch](#deutsch) · 🇬🇧 [English](#english)
 
-![OpenRegie – das Regiepult (Pre-Alpha, Build 1.2.2) / the control room (pre-alpha, build 1.2.2)](docs/bildschirmfoto.png)
-*Pre-Alpha · Build 1.2.2 – das Regiepult mit Countdown, Live-Bild, Twitch-Titel und Shots /
-the control room with countdown, live picture, Twitch title and shots*
+![OpenRegie – das Regiepult (Pre-Alpha, Build 1.2.3) / the control room (pre-alpha, build 1.2.3)](docs/bildschirmfoto.png)
+*Pre-Alpha · Build 1.2.3 – das Regiepult mit „Stream starten“, Countdown, Live-Bild, Twitch-Titel und Shots /
+the control room with “start stream”, countdown, live picture, Twitch title and shots*
 
 ---
 

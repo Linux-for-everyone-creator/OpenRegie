@@ -128,7 +128,7 @@ Fehlerbericht: Countdown steht auf 00:00 und lässt sich nicht bedienen.
 - [x] Kopfleiste: Knopf, ON AIR und Uhr fest breit – nichts rutscht beim Umschalten unter dem Zeiger weg
 - [x] Geprüft: Unit-Tests 3× je 315/315, echtes OBS 33.0.3 (`werkzeuge/test_stream_mit_echtem_obs.py`)
       3× je 73/73 ohne OBS-Fehlerfenster, echtes Uno 28/28
-- [ ] Frischer Screenshot fürs README
+- [x] Frischer Screenshot fürs README (mit dem neuen Knopf, als Pre-Alpha markiert)
 - [ ] Ein echter Test-Stream zu Twitch mit dem neuen Knopf durch Kevin
 
 ### Build 1.3

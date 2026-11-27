@@ -59,6 +59,7 @@ und du bist live – OBS musst du dafür nicht mehr anfassen. Läuft der Stream,
   wurden nie richtig weggeräumt und flogen dann alle auf einmal raus – das stürzte ab. Die Testhilfe
   räumt jetzt laufend auf, so wie das echte Programm. Zwei wackelige Countdown-Tests sind dabei auch
   gleich stabil geworden.
+- Frischer Screenshot im README – mit dem neuen Knopf oben rechts, als Pre-Alpha markiert.
 
 ## Build 1.2.2 – Countdown wieder flott, „Shot hinzufügen“ im eigenen Fenster · 23.11.2026
 
