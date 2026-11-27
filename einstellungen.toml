@@ -137,6 +137,13 @@ on_air_aus = "#2A1416"
 on_air_aus_text = "#7A4A4D"
 on_air_startet = "#C0611B"
 
+# Knopf „Stream starten“ / „Stream beenden“ oben neben ON AIR (ab Build 1.2.3)
+stream_starten = "#2EA043"
+stream_beenden = "#E5484D"
+# „Verbinde …“ / „Stoppe …“: gesperrt, aber gut zu sehen
+stream_wartet = "#C0611B"
+stream_wartet_text = "#FFFFFF"
+
 # Lampen der Overlays (Rahmen der Kacheln)
 tally_an = "#E5484D"
 tally_bereit = "#3FB950"
@@ -172,6 +179,8 @@ rahmen_dick = 4
 abstand = 16
 lampe = 36
 on_air_breite = 230
+# Knopf „Stream starten“ / „Stream beenden“ oben in der Kopfleiste
+stream_knopf_breite = 240
 on_air_hoehe = 64
 schrift_uhr = 44
 logo = 64
@@ -219,8 +228,32 @@ status_getrennt = "Keine Verbindung zu OBS"
 
 on_air_an = "ON AIR"
 on_air_aus = "NICHT LIVE"
-on_air_startet = "STARTET …"
+on_air_startet = "VERBINDE …"
 on_air_stoppt = "STOPPT …"
+# Live gewesen, die Verbindung zu Twitch & Co. ist weg – OBS versucht es von selbst wieder
+# (gleich lang wie on_air_startet, damit oben nichts verrutscht; der Knopf daneben zeigt „Stream beenden“)
+on_air_wieder = "VERBINDE …"
+
+# Knopf „Stream starten“ (ab Build 1.2.3)
+knopf_stream_starten = "▶  Stream starten"
+knopf_stream_verbinde = "Verbinde …"
+knopf_stream_beenden = "■  Stream beenden"
+knopf_stream_stoppe = "Stoppe …"
+gesperrt_stream = "Das geht erst, wenn OBS verbunden ist."
+gesperrt_stream_verbinde = "Einen Moment – OBS verbindet gerade den Stream."
+gesperrt_stream_stoppe = "Einen Moment – OBS beendet gerade den Stream."
+frage_stream_beenden_titel = "Stream beenden?"
+frage_stream_beenden = "Stream wirklich beenden?\n\nDann bist du nicht mehr live."
+knopf_stream_beenden_ja = "Ja, Stream beenden"
+knopf_stream_beenden_nein = "Weiter streamen"
+knopf_meldung_verstanden = "Verstanden"
+# Meldungen, wenn das Starten nicht klappt (einfach, ohne Fachsprache)
+stream_meldung_kein_key = "Der Stream kann nicht starten: In OBS fehlt der Stream-Key. Trage ihn in OBS ein (Einstellungen → Stream) – den Key findest du bei Twitch im Dashboard."
+stream_meldung_kein_server = "Der Stream kann nicht starten: In OBS ist keine Server-Adresse eingetragen (Einstellungen → Stream)."
+stream_meldung_fehlstart = "Der Stream konnte nicht starten. OBS kommt nicht zu Twitch durch. Prüfe die Internetverbindung und den Stream-Key in OBS, dann noch einmal versuchen."
+stream_meldung_zeitlimit = "Der Stream ist nach 30 Sekunden immer noch nicht live. Bitte noch einmal versuchen. Hilft das nicht: Stream-Key und Internet prüfen."
+stream_meldung_start_fehler = "OBS hat den Stream nicht gestartet. Bitte noch einmal versuchen."
+stream_meldung_stopp_fehler = "OBS hat den Stream nicht beendet. Bitte noch einmal auf „Stream beenden“ klicken."
 
 knopf_obs_starten = "OBS starten"
 knopf_verbinden = "Neu verbinden"

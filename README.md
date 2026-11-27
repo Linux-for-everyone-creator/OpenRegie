@@ -1,10 +1,10 @@
 # OpenRegie – Profi-Regie für alle. Einfach live.
 
 > [!WARNING]
-> **Pre-Alpha (Build 1.2.2).** OpenRegie ist in früher Entwicklung. Funktionen ändern sich,
+> **Pre-Alpha (Build 1.2.3).** OpenRegie ist in früher Entwicklung. Funktionen ändern sich,
 > Fehler sind wahrscheinlich. Bitte noch **nicht** für wichtige Livestreams verwenden.
 >
-> **Pre-alpha (build 1.2.2).** OpenRegie is in early development. Features will change and
+> **Pre-alpha (build 1.2.3).** OpenRegie is in early development. Features will change and
 > bugs are likely. Please do **not** rely on it for important live streams yet.
 
 🇩🇪 [Deutsch](#deutsch) · 🇬🇧 [English](#english)
@@ -23,6 +23,8 @@ Sie ist für Menschen gemacht, die eine einfache, große und klare Bedienung bra
 zum Beispiel mit Joystick, Maus oder nur der Tastatur.
 
 - **OBS** läuft unsichtbar als Motor im Hintergrund. OpenRegie steuert es über den OBS-WebSocket.
+- **Stream starten und beenden** mit einem großen Knopf oben neben „ON AIR“ (Beenden mit Nachfrage).
+  Das rote ON-AIR-Licht leuchtet nur, wenn du wirklich live bist.
 - **Overlays.uno** liefert alle Grafiken: ein- und ausblenden, Texte ändern, Countdown steuern.
 - **Twitch**: Den Streamtitel direkt aus OpenRegie ändern.
 - **Shots** (wie bei Wirecast): alle Szenen als große Kacheln mit Vorschaubild, ein Klick schaltet live.
@@ -68,6 +70,9 @@ Port und Passwort liest OpenRegie selbst aus den OBS-Einstellungen.
 Nur falls das nicht klappt: `cp daten/geheim.beispiel.toml daten/geheim.toml` und das Passwort dort bei
 `[obs] passwort` eintragen. Diese Datei wird nie hochgeladen.
 
+Damit „Stream starten“ klappt, muss in OBS unter **Einstellungen → Stream** dein Dienst (z. B. Twitch)
+mit **Stream-Key** eingetragen sein. Fehlt der Key, sagt OpenRegie Bescheid und startet gar nicht erst.
+
 ### Overlays.uno verbinden
 1. In Overlays.uno das Projekt öffnen, oben rechts im Menü **„API Description“** wählen und die Adresse kopieren.
 2. In OpenRegie auf **„+“ (Uno-Projekt hinzufügen)** und dann auf **„Aus Zwischenablage einfügen“** klicken.
@@ -88,6 +93,8 @@ Einfach auf **„Mit Twitch anmelden“** klicken und den angezeigten Code auf d
 ### Für Entwickler
 - Tests: `python3 -m unittest discover -s tests -t .`
 - Test mit echtem OBS: `python3 werkzeuge/test_mit_echtem_obs.py`
+- Stream starten/beenden mit echtem OBS (streamt nur an einen Empfänger auf dem eigenen PC):
+  `python3 werkzeuge/test_stream_mit_echtem_obs.py`
 - Test mit echtem Uno: `cp daten/geheim.beispiel.toml daten/geheim.toml`, eigene Adresse eintragen,
   dann `python3 werkzeuge/test_mit_echtem_uno.py --ja-schalten` (blendet kurz ein!).
   `daten/geheim.toml` wird von Git ignoriert. Bitte **niemals** echte Zugangsdaten committen.
@@ -111,6 +118,8 @@ It is built for people who need a simple, large and clear interface, for example
 when using a joystick, a mouse or only the keyboard.
 
 - **OBS** runs invisibly in the background as the engine. OpenRegie controls it via OBS WebSocket.
+- **Start and stop the stream** with one big button next to "ON AIR" (stopping asks first).
+  The red ON AIR light only shines when you are really live.
 - **Overlays.uno** provides all graphics: show and hide overlays, edit texts, control countdowns.
 - **Twitch**: change your stream title right from OpenRegie.
 - **Shots** (like Wirecast): every scene as a big tile with a preview, one click puts it on air.
@@ -158,6 +167,9 @@ OpenRegie reads the port and password from the OBS configuration automatically.
 Only if that fails: `cp daten/geheim.beispiel.toml daten/geheim.toml` and put the password under
 `[obs] passwort`. This file is never uploaded.
 
+For "Stream starten" (start stream) to work, set your service (e.g. Twitch) with its **stream key** in OBS
+under **Settings → Stream**. Without a key OpenRegie tells you so and does not start at all.
+
 ### Connecting Overlays.uno
 1. Open your project in Overlays.uno, choose **"API Description"** in the top-right menu and copy the URL.
 2. In OpenRegie click **"+" (add Uno project)**, then **"Aus Zwischenablage einfügen"** (paste from clipboard).
@@ -178,6 +190,8 @@ Just click **"Mit Twitch anmelden"** (log in with Twitch) and confirm the code s
 ### For developers
 - Tests: `python3 -m unittest discover -s tests -t .`
 - Test against real OBS: `python3 werkzeuge/test_mit_echtem_obs.py`
+- Start/stop stream with real OBS (streams only to a receiver on your own PC):
+  `python3 werkzeuge/test_stream_mit_echtem_obs.py`
 - Test against real Uno: `cp daten/geheim.beispiel.toml daten/geheim.toml`, add your URL, then run
   `python3 werkzeuge/test_mit_echtem_uno.py --ja-schalten` (briefly shows overlays live!).
   `daten/geheim.toml` is git-ignored. **Never** commit real credentials.

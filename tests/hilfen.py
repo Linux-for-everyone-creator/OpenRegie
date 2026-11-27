@@ -1,6 +1,6 @@
 import time
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 from openregie import einstellungen
@@ -11,10 +11,18 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
+def ereignisse():
+    """Wie die echte Ereignisschleife: auch „später löschen“ (deleteLater) sofort erledigen.
+    processEvents() allein tut das nicht – dann sammeln sich in den Tests alte Objekte an und werden
+    irgendwann alle auf einmal gelöscht (z. B. in der Schleife einer Nachfrage) – das stürzte ab."""
+    QCoreApplication.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+
+
 def warte_bis(bedingung, ms=3000) -> bool:
     ende = time.monotonic() + ms / 1000
     while time.monotonic() < ende:
-        QCoreApplication.processEvents()
+        ereignisse()
         if bedingung():
             return True
         time.sleep(0.005)

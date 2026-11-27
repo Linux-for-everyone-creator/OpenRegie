@@ -16,6 +16,7 @@ import hashlib
 import itertools
 import json
 import logging
+import time
 from enum import Enum
 from typing import Callable
 
@@ -49,6 +50,10 @@ CODE_VERSION_ZU_ALT = 4010
 ANMELDE_ZEITLIMIT_MS = 5000
 ANFRAGE_ZEITLIMIT_MS = 10000
 STREAM_ABFRAGE_MS = 5000
+# So lange nach einem Stream-Ereignis von OBS gilt das Ereignis mehr als eine Abfrage. Grund (echtes OBS 33
+# gemessen): Direkt nach „gestoppt“ meldet GetStreamStatus noch ~130 ms „läuft“ – sonst leuchtete ON AIR
+# kurz wieder rot, und „Stream startet“-Regeln lösten fälschlich aus.
+EREIGNIS_VORRANG_S = 3.0
 ZEITLIMIT_TEXT = "OBS hat nicht geantwortet."
 
 
@@ -62,7 +67,12 @@ class Sendung(Enum):
     AUS = "aus"
     STARTET = "startet"
     AN = "an"
+    WIEDER = "wieder"  # live gewesen, Verbindung zum Streaming-Dienst weg – OBS verbindet neu
     STOPPT = "stoppt"
+
+
+# In diesen Zuständen läuft ein Stream (auch wenn er gerade neu verbindet)
+LIVE = (Sendung.AN, Sendung.WIEDER)
 
 
 def anmeldeschluessel(passwort: str, salz: str, aufgabe: str) -> str:
@@ -80,6 +90,12 @@ class ObsVerbindung(QObject):
     sendung_geaendert = Signal(object)  # Sendung
     szene_geaendert = Signal(str)  # Name der gesendeten Szene
     ereignis = Signal(str, dict)  # alle OBS-Ereignisse, für spätere Builds
+    # Echte Übergänge für Wenn-dann: „ist live gegangen“ / „ist wirklich zu Ende“ – nicht bei
+    # „verbindet neu → wieder da“, nicht bei einem Fehlstart und nicht, nur weil OBS kurz weg war.
+    live_begonnen = Signal()
+    live_beendet = Signal()
+    # Nach dem (Neu-)Verbinden: OBS hat gesagt, ob der Stream läuft (vorher weiß es niemand)
+    stream_bekannt_geaendert = Signal(bool)
 
     def __init__(self, obs_einstellungen, texte, parent=None, zugang_finden=None, obs_laeuft=None):
         super().__init__(parent)
@@ -91,6 +107,9 @@ class ObsVerbindung(QObject):
         self.status = Status.GETRENNT
         self.meldung = ""
         self.sendung = Sendung.AUS
+        self._war_live = False
+        self._letztes_stream_ereignis = -1e9  # time.monotonic() des letzten StreamStateChanged
+        self.stream_bekannt = False
         self.szene = ""
         self.szene_kennung = ""  # eindeutige OBS-Kennung (UUID) der gesendeten Szene – bleibt beim Umbenennen gleich
 
@@ -229,8 +248,9 @@ class ObsVerbindung(QObject):
         else:
             meldung = self._texte.meldung_websocket_aus
 
-        self._sendung_setzen(Sendung.AUS)
+        # Erst „getrennt“, dann „aus“: so hält niemand das „aus“ für einen gescheiterten Stream-Start
         self._status_setzen(Status.GETRENNT, meldung)
+        self._sendung_setzen(Sendung.AUS, getrennt=True)
         if self._aktiv:
             self._neu_timer.start(int(float(self._obs.neu_verbinden_sekunden) * 1000))
 
@@ -257,7 +277,10 @@ class ObsVerbindung(QObject):
             status = d.get("requestStatus") or {}
             ok = bool(status.get("result"))
             fehlertext = "" if ok else (status.get("comment") or f"Fehler {status.get('code')}")
-            self._anfrage_beenden(d.get("requestId", ""), ok, d.get("responseData") or {}, fehlertext)
+            daten = d.get("responseData") or {}
+            if not ok:
+                daten = dict(daten, fehlercode=status.get("code"))  # z. B. 500 = läuft schon
+            self._anfrage_beenden(d.get("requestId", ""), ok, daten, fehlertext)
 
     def _begruessung(self, d: dict) -> None:
         identify = {"rpcVersion": 1, "eventSubscriptions": EREIGNIS_MASKE}
@@ -317,22 +340,34 @@ class ObsVerbindung(QObject):
     #  Stream (On Air) und Szene
     # ------------------------------------------------------------------
     def _stream_status_abfragen(self) -> None:
+        self.stream_status_pruefen()
+
+    def stream_status_pruefen(self, erzwingen: bool = False) -> None:
+        """Fragt OBS, ob der Stream läuft. GetStreamStatus kennt nur an/aus (und „verbindet neu“);
+        „startet/stoppt“ kommen als Ereignis und werden darum sonst nicht überschrieben.
+        erzwingen=True: auch ein hängendes „startet …“ auf „aus“ setzen (OBS meldet sich nicht mehr)."""
         def antwort(ok, daten, _fehler):
             if ok:
-                # GetStreamStatus kennt nur an/aus; „startet/stoppt“ kommen als Ereignis.
                 aktiv = bool(daten.get("outputActive"))
-                if aktiv and self.sendung is not Sendung.STOPPT:
-                    self._sendung_setzen(Sendung.AN)
-                elif not aktiv and self.sendung is not Sendung.STARTET:
+                frisch = time.monotonic() - self._letztes_stream_ereignis < EREIGNIS_VORRANG_S
+                if frisch and not erzwingen and self.stream_bekannt:
+                    pass  # OBS hat eben selbst gemeldet, was los ist – das gilt (siehe EREIGNIS_VORRANG_S)
+                elif aktiv and self.sendung is not Sendung.STOPPT:
+                    self._sendung_setzen(Sendung.WIEDER if daten.get("outputReconnecting") else Sendung.AN)
+                elif not aktiv and (erzwingen or self.sendung is not Sendung.STARTET):
                     self._sendung_setzen(Sendung.AUS)
+                if not self.stream_bekannt:  # erst NACH dem Setzen melden – sonst kurz der falsche Zustand
+                    self.stream_bekannt = True
+                    self.stream_bekannt_geaendert.emit(True)
 
         self.anfrage("GetStreamStatus", rueckruf=antwort)
 
     def _sendung_aus_obs(self, aktiv, zustand) -> None:
+        self._letztes_stream_ereignis = time.monotonic()
         zuordnung = {
             "OBS_WEBSOCKET_OUTPUT_STARTING": Sendung.STARTET,
             "OBS_WEBSOCKET_OUTPUT_STARTED": Sendung.AN,
-            "OBS_WEBSOCKET_OUTPUT_RECONNECTING": Sendung.AN,
+            "OBS_WEBSOCKET_OUTPUT_RECONNECTING": Sendung.WIEDER,
             "OBS_WEBSOCKET_OUTPUT_RECONNECTED": Sendung.AN,
             "OBS_WEBSOCKET_OUTPUT_STOPPING": Sendung.STOPPT,
             "OBS_WEBSOCKET_OUTPUT_STOPPED": Sendung.AUS,
@@ -354,13 +389,24 @@ class ObsVerbindung(QObject):
         self.status, self.meldung = status, meldung
         if status is not Status.VERBUNDEN:
             self._szene_setzen("")
+            if self.stream_bekannt:
+                self.stream_bekannt = False
+                self.stream_bekannt_geaendert.emit(False)
         self.status_geaendert.emit(status, meldung)
 
-    def _sendung_setzen(self, sendung: Sendung) -> None:
+    def _sendung_setzen(self, sendung: Sendung, getrennt: bool = False) -> None:
+        """getrennt=True: „aus“ nur, weil die Verbindung zu OBS weg ist – der Stream kann weiterlaufen.
+        Dann zählt das (noch) nicht als „Stream zu Ende“."""
         if sendung is not self.sendung:
             self.sendung = sendung
             log.info("Sendung: %s", sendung.value)
             self.sendung_geaendert.emit(sendung)
+        if sendung in LIVE and not self._war_live:
+            self._war_live = True
+            self.live_begonnen.emit()
+        elif sendung is Sendung.AUS and self._war_live and not getrennt:
+            self._war_live = False
+            self.live_beendet.emit()
 
     def _szene_setzen(self, name: str, kennung: str = "") -> None:
         self.szene_kennung = kennung if name else ""

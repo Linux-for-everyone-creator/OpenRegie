@@ -129,6 +129,25 @@ def stylesheet(E) -> str:
     QPushButton#einblenden:disabled, QPushButton#ausblenden:disabled, QPushButton#twitch:disabled {{
         background-color: {f.knopf_aus}; color: {f.knopf_aus_text}; border-color: {f.knopf_aus};
     }}
+    /* Knopf „Stream starten“ / „Stream beenden“ (Kopfleiste) – „Verbinde …“/„Stoppe …“ gesperrt, aber farbig */
+    /* immer gleich breit – sonst rutschen die Knöpfe beim Umschalten unter dem Zeiger weg */
+    QPushButton#stream_starten, QPushButton#stream_beenden, QPushButton#stream_wartet {{
+        min-width: {int(g.stream_knopf_breite) - 2 * int(g.rahmen_dick) - 16}px;
+        max-width: {int(g.stream_knopf_breite) - 2 * int(g.rahmen_dick) - 16}px;
+    }}
+    QPushButton#stream_starten {{ background-color: {f.stream_starten}; border-color: {f.stream_starten};
+                                  font-size: {g.schrift_eingabe}px; }}
+    QPushButton#stream_beenden {{ background-color: {f.stream_beenden}; border-color: {f.stream_beenden};
+                                  font-size: {g.schrift_eingabe}px; }}
+    QPushButton#stream_wartet, QPushButton#stream_wartet:disabled {{
+        background-color: {f.stream_wartet}; border-color: {f.stream_wartet}; color: {f.stream_wartet_text};
+        font-size: {g.schrift_eingabe}px; }}
+    QPushButton#stream_starten:hover, QPushButton#stream_beenden:hover {{ border-color: {f.knopf_hover_rahmen}; }}
+    QPushButton#stream_starten:focus, QPushButton#stream_beenden:focus {{ border-color: {f.knopf_fokus_rahmen}; }}
+    QPushButton#stream_starten:pressed, QPushButton#stream_beenden:pressed {{ background-color: {f.knopf_gedrueckt}; }}
+    QPushButton#stream_starten:disabled {{
+        background-color: {f.knopf_aus}; color: {f.knopf_aus_text}; border-color: {f.knopf_aus};
+    }}
     /* Große Auswahllisten (Wenn-dann): groß, mit breiter Scrollfläche */
     QComboBox {{
         background-color: {f.knopf}; color: {f.knopf_text};

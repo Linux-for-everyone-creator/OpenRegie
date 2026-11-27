@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 import uuid as _uuid
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QObject
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QObject, QTimer
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtNetwork import QHostAddress
 from PySide6.QtWebSockets import QWebSocketProtocol, QWebSocketServer
@@ -48,6 +49,19 @@ class FalschesObs(QObject):
 
         # „Zustand“ des nachgeahmten OBS
         self.stream_aktiv = False
+        self.stream_wackelt = False  # „verbindet neu“ (Verbindung zu Twitch weg)
+        # Stream-Ziel wie in OBS „Einstellungen → Stream“ (Kevins OBS: Twitch mit Key)
+        self.dienst = {"streamServiceType": "rtmp_common",
+                       "streamServiceSettings": {"service": "Twitch", "server": "auto", "key": "live_test_123"}}
+        # Was StartStream tut – wie das echte OBS 33 (geprüft 27.11.2026):
+        #   "ok"         startet → live
+        #   "fehlstart"  startet → aus (Server nicht erreichbar)
+        #   "haengt"     startet → nichts mehr (so verhält sich OBS ohne Stream-Key)
+        #   "abgelehnt"  Anfrage scheitert gleich
+        self.start_verhalten = "ok"
+        # Wie echtes OBS 33: nach „gestoppt“ meldet GetStreamStatus noch kurz „läuft“ (gemessen ~130 ms)
+        self.nachlauf_s = 0.0
+        self._nachlauf_bis = 0.0
         self.szene = "Szene 1"
         self.szenen = {"Szene 1": [], "Pause": []}  # Szene -> Liste von (id, quellenname, an)
         self.quellen: dict[str, dict] = {}  # name -> {"kind":..., "settings":...}
@@ -135,7 +149,19 @@ class FalschesObs(QObject):
     def _bearbeiten(self, typ, d):
         OK = (True, 100, None)
         if typ == "GetStreamStatus":
-            return (*OK, {"outputActive": self.stream_aktiv, "outputReconnecting": False})
+            aktiv = self.stream_aktiv or time.monotonic() < self._nachlauf_bis
+            return (*OK, {"outputActive": aktiv, "outputReconnecting": self.stream_wackelt})
+        if typ == "GetStreamServiceSettings":
+            return (*OK, dict(self.dienst))
+        if typ == "StartStream":
+            if self.stream_aktiv:
+                return (False, 500, None, None)  # läuft schon
+            if self.start_verhalten == "abgelehnt":
+                return (False, 702, "Kaputt", None)
+            # Wie OBS: erst die Antwort, dann die Ereignisse
+            QTimer.singleShot(0, {"ok": self.stream_starten, "fehlstart": self.stream_fehlstart,
+                                  "haengt": self.stream_haengt}[self.start_verhalten])
+            return (*OK, None)
         if typ == "GetCurrentProgramScene":
             k = self.kennung(self.szene)
             return (*OK, {"sceneName": self.szene, "currentProgramSceneName": self.szene,
@@ -214,7 +240,9 @@ class FalschesObs(QObject):
             self.sammlung = d["sceneCollectionName"]
             return (*OK, None)
         if typ == "StopStream":
-            self.stream_stoppen()
+            if not self.stream_aktiv:
+                return (False, 501, None, None)  # läuft nicht
+            QTimer.singleShot(0, self.stream_stoppen)
             return (*OK, None)
         if typ == "GetSceneList":
             return (*OK, {"currentProgramSceneName": self.szene,
@@ -357,9 +385,27 @@ class FalschesObs(QObject):
         self.stream_aktiv = True
         self.ereignis("StreamStateChanged", {"outputActive": True, "outputState": "OBS_WEBSOCKET_OUTPUT_STARTED"})
 
+    def stream_fehlstart(self):
+        self.ereignis("StreamStateChanged", {"outputActive": False, "outputState": "OBS_WEBSOCKET_OUTPUT_STARTING"})
+        self.ereignis("StreamStateChanged", {"outputActive": False, "outputState": "OBS_WEBSOCKET_OUTPUT_STOPPED"})
+
+    def stream_haengt(self):
+        self.ereignis("StreamStateChanged", {"outputActive": False, "outputState": "OBS_WEBSOCKET_OUTPUT_STARTING"})
+
+    def stream_wackeln(self):
+        """Verbindung zu Twitch weg: OBS verbindet neu (wie echtes OBS: outputActive im Ereignis false)."""
+        self.stream_wackelt = True
+        self.ereignis("StreamStateChanged", {"outputActive": False, "outputState": "OBS_WEBSOCKET_OUTPUT_RECONNECTING"})
+
+    def stream_wieder_da(self):
+        self.stream_wackelt = False
+        self.ereignis("StreamStateChanged", {"outputActive": True, "outputState": "OBS_WEBSOCKET_OUTPUT_RECONNECTED"})
+
     def stream_stoppen(self):
         self.ereignis("StreamStateChanged", {"outputActive": True, "outputState": "OBS_WEBSOCKET_OUTPUT_STOPPING"})
         self.stream_aktiv = False
+        self.stream_wackelt = False
+        self._nachlauf_bis = time.monotonic() + self.nachlauf_s
         self.ereignis("StreamStateChanged", {"outputActive": False, "outputState": "OBS_WEBSOCKET_OUTPUT_STOPPED"})
 
     def szene_wechseln(self, name):

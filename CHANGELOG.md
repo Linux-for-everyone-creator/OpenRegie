@@ -2,6 +2,64 @@
 
 Hier steht, was sich in jedem Build geändert hat. Neueste Einträge oben.
 
+## Build 1.2.3 – Live gehen mit einem Klick · 27.11.2026
+
+**Kurz gesagt:** Oben neben „ON AIR“ sitzt jetzt ein großer grüner Knopf **„▶ Stream starten“**. Ein Klick,
+und du bist live – OBS musst du dafür nicht mehr anfassen. Läuft der Stream, wird daraus ein roter
+**„■ Stream beenden“**, und der fragt lieber einmal nach, bevor du offline gehst.
+
+**So funktioniert's**
+- **Starten** geht sofort, ohne Nachfrage. Der Knopf wird orange und zeigt **„Verbinde …“**, bis OBS
+  wirklich live ist. Solange ist er gesperrt – ein zweiter Klick aus Versehen macht also nichts.
+- **Beenden** fragt: „Stream wirklich beenden?“ Vorgewählt ist **„Weiter streamen“** – wer sich
+  verklickt, bleibt also live.
+- Das rote **ON AIR** leuchtet nur noch, wenn OBS **wirklich** sendet. Beim Verbinden steht da
+  „VERBINDE …“ in Orange.
+- Bricht mitten im Stream die Verbindung zu Twitch weg, versucht OBS es von selbst wieder. Dann steht
+  oben auch „VERBINDE …“ (orange statt rot) – und „Stream beenden“ geht trotzdem.
+- Startest oder stoppst du den Stream in OBS selbst, zieht OpenRegie mit. Knopf und Licht zeigen immer
+  das, was OBS gerade wirklich tut.
+
+**Wenn's nicht klappt, sagt OpenRegie es dir – in normalen Worten**
+- **Kein Stream-Key in OBS?** Dann startet OpenRegie gar nicht erst und sagt dir, wo du ihn einträgst.
+  Das war wichtig: Beim Testen kam raus, dass OBS ohne Key ewig „verbindet“ und dabei ein eigenes
+  Fehlerfenster aufmacht – mit dem Satz, man solle seine Grafiktreiber aktualisieren. Mit den Treibern
+  hat das nichts zu tun (deine sind aktuell), es fehlte einfach der Key.
+- **Twitch nicht erreichbar** (z. B. Internet weg): „Der Stream konnte nicht starten …“ – und der Knopf
+  ist gleich wieder bereit.
+- **Nach 30 Sekunden immer noch nicht live?** Dann gibt OpenRegie auf, statt ewig zu warten, und sagt
+  Bescheid.
+- Die Meldung steht unter „Live-Bild“ und verschwindet mit **„Verstanden“** oder von selbst, sobald du
+  live bist.
+- Ist die Verbindung zu OBS weg, ist der Knopf grau. Fährst du drüber, steht da, warum.
+
+**Unter der Haube**
+- Neues Bauteil `openregie/obs/stream.py`. Nur das redet mit OBS übers Starten und Stoppen, die
+  Oberfläche fragt immer nur dort nach (wie bisher bei allem, was OBS betrifft).
+- Wenn-dann-Regeln „Stream startet / endet“ lösen jetzt nur bei **echten** Übergängen aus – also nicht
+  noch mal, wenn OBS nach einem Wackler wieder verbunden ist, nicht bei einem Fehlstart und nicht, nur
+  weil OBS kurz weg war.
+- Die Kopfleiste ruckelt nicht mehr: Knopf, ON AIR und Uhr sind fest breit. Beim Umschalten rutscht
+  nichts unter dem Joystick-Zeiger weg (geprüft bei 1600 und 1920 Pixeln Breite).
+
+- Kleiner Fund beim Testen mit dem echten OBS: Direkt nach „Stream gestoppt“ behauptet OBS noch gut
+  eine Zehntelsekunde lang, er laufe noch. Hätte die regelmäßige Abfrage genau da reingegrätscht,
+  wäre ON AIR kurz wieder rot geworden (und eine „Stream startet“-Regel hätte ausgelöst). Jetzt zählt
+  in den ersten Sekunden das, was OBS selbst gemeldet hat.
+
+**Geprüft**
+- Alle Unit-Tests: **315 von 315**, dreimal hintereinander. Davon 37 neu für den Stream-Knopf: starten,
+  beenden, Nachfrage abbrechen, Start/Stopp direkt in OBS, Verbindung zu OBS weg (beim Prüfen, beim
+  Verbinden, während live), kein Stream-Key, Fehlstart, Zeitlimit, Doppelklick, Twitch-Wackler,
+  Wenn-dann-Regeln, Kopfleiste verrutscht nicht, Countdown und Uno laufen nebenher weiter.
+- Echtes OBS 33.0.3 (`werkzeuge/test_stream_mit_echtem_obs.py`, gestreamt nur an einen Empfänger auf
+  dem eigenen PC, nie zu Twitch): **73 von 73**, dreimal hintereinander. Kein einziges OBS-Fehlerfenster.
+- Echtes Overlays.uno („Countdown | Circles“): **28 von 28** – Countdown danach wieder auf 1:30:00.
+- Beim Testen fiel ein alter Haken in den **Tests** auf (nicht im Programm): Fenster aus früheren Tests
+  wurden nie richtig weggeräumt und flogen dann alle auf einmal raus – das stürzte ab. Die Testhilfe
+  räumt jetzt laufend auf, so wie das echte Programm. Zwei wackelige Countdown-Tests sind dabei auch
+  gleich stabil geworden.
+
 ## Build 1.2.2 – Countdown wieder flott, „Shot hinzufügen“ im eigenen Fenster · 23.11.2026
 
 **Kurz gesagt:** Der Countdown hing auf 00:00 fest und „Start“ war grau. Das ist jetzt behoben. Und die

@@ -856,10 +856,14 @@ class GesperrteKnoepfeTest(Grundlage):
         QToolTip.hideText()
         super().tearDown()
 
-    def hinweis_beim_drueberfahren(self, k):
-        """Was Qt beim Drüberfahren anzeigt (das Hinweis-Ereignis, das Qt nach kurzem Stillhalten schickt)."""
+    def hinweis_weg(self):
         QToolTip.hideText()
         self.assertTrue(warte_bis(lambda: not QToolTip.isVisible(), 2000))  # Qt schließt mit kurzer Verzögerung
+
+    def hinweis_beim_drueberfahren(self, k, schon_weg=False):
+        """Was Qt beim Drüberfahren anzeigt (das Hinweis-Ereignis, das Qt nach kurzem Stillhalten schickt)."""
+        if not schon_weg:
+            self.hinweis_weg()
         punkt = k.rect().center()
         QApplication.sendEvent(k, QHelpEvent(QEvent.Type.ToolTip, punkt, k.mapToGlobal(punkt)))
         return QToolTip.text() if QToolTip.isVisible() else ""
@@ -870,10 +874,13 @@ class GesperrteKnoepfeTest(Grundlage):
         for k in self.f.findChildren(QPushButton):
             if k.isVisible() and not k.isEnabled():
                 gefunden += 1
+                # Erst den alten Hinweis wegwarten, dann Text und Hinweis direkt hintereinander vergleichen
+                # (sonst kann die Uno-Abfrage jede Sekunde dazwischen den Zustand ändern)
+                self.hinweis_weg()
                 text = gesperrt_text(k)
                 self.assertTrue(text, f"{zustand}: „{k.text()}“ ist ausgegraut und sagt nicht, warum")
                 self.assertNotEqual(text, self.E.texte.gesperrt_moment, f"{zustand}: „{k.text()}“ zu allgemein")
-                self.assertEqual(self.hinweis_beim_drueberfahren(k), text, f"{zustand}: {k.text()}")
+                self.assertEqual(self.hinweis_beim_drueberfahren(k, schon_weg=True), text, f"{zustand}: {k.text()}")
                 self.assertEqual(k.cursor().shape(), Qt.CursorShape.ForbiddenCursor, k.text())
         return gefunden
 
@@ -901,7 +908,7 @@ class GesperrteKnoepfeTest(Grundlage):
     def test_in_jedem_zustand_sagen_alle_gesperrten_warum(self):
         t = self.E.texte
         n = self.alle_gesperrten_sagen_warum("ausgeblendet, bereit")
-        self.assertEqual(n, 2)  # Pause und Ausblenden
+        self.assertEqual(n, 3)  # Pause, Ausblenden und (ohne OBS) „Stream starten“ – ab Build 1.2.3
         klick(self.b.start)
         self.assertTrue(warte_bis(lambda: self.b.pause.isEnabled(), 3000))
         self.alle_gesperrten_sagen_warum("Countdown läuft")
@@ -989,11 +996,23 @@ class GesperrteKnoepfeTest(Grundlage):
         self.assertFalse(self.b.pause.isEnabled())
         self.assertEqual(self.hinweis_beim_drueberfahren(self.b.pause), t.gesperrt_pause_abgelaufen)
         self.alle_gesperrten_sagen_warum("abgelaufen")
-        self.e.werte[CONTENT]["BeginTime"] = 300  # damit er nicht gleich wieder abläuft
-        self.b.overlay.dauer = 300
+        # Klick auf „Neu starten“, solange er abgelaufen ist (wie bei Kevin): Uno bekommt reset, dann play.
+        # (Früher setzte der Test die Dauer VOR dem Klick auf 300 s – dann war der Countdown für OpenRegie
+        #  nicht mehr abgelaufen, der Knopf machte „weiter“, und das Ergebnis hing davon ab, wie lange der
+        #  Test bis dahin gebraucht hatte.)
+        timer = self.e.werte[CONTENT]["Timer"]
+        alte_startzeit = timer["UTC"]
+        warte(300)
         klick(self.b.start)
+        # reset (verstrichene Zeit auf 0) und play (läuft ab jetzt) sind bei Uno angekommen
+        self.assertTrue(warte_bis(lambda: timer["isRunning"] and timer["value"] == 0
+                                  and timer["UTC"] >= alte_startzeit + 300, 3000), timer)
+        self.e.werte[CONTENT]["BeginTime"] = 300  # erst jetzt länger – damit er nicht gleich wieder abläuft
+        self.b.overlay.dauer = 300
+        self.b._zustand_zeigen()
         self.assertTrue(warte_bis(lambda: self.b.countdown_zustand.text() == t.countdown_laeuft, 3000))
-        self.assertIn(self.b.zeit.text(), ("05:00", "04:59"))
+        # Die Anzeige holt sich den neuen Stand von Uno: von vorn, nicht da weiter, wo er war
+        self.assertTrue(warte_bis(lambda: self.b.zeit.text() in ("05:00", "04:59"), 3000), self.b.zeit.text())
         self.assertEqual(self.b.start.text(), t.knopf_countdown_start)
         self.assertTrue(self.b.pause.isEnabled())
 

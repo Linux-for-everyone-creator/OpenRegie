@@ -86,16 +86,12 @@ def _signal(signal, pruefen):
     return einrichten
 
 
-def _sendung_ist(name):
-    def pruefen(_wert, sendung):
-        return getattr(sendung, "value", sendung) == name
-    return pruefen
-
-
+# Nur echte Übergänge (ab Build 1.2.3): „Stream startet“ nicht noch einmal, wenn OBS nach einem Wackler
+# wieder verbunden ist; „Stream endet“ nicht bei einem Fehlstart oder nur weil OBS kurz weg war.
 ausloeser_eintragen(Ausloeser("stream_startet", "stream", KEINE,
-                              _signal(lambda u: u.sendung_geaendert, _sendung_ist("an"))))
+                              _signal(lambda u: u.live_begonnen, lambda _wert: True)))
 ausloeser_eintragen(Ausloeser("stream_endet", "stream", KEINE,
-                              _signal(lambda u: u.sendung_geaendert, _sendung_ist("aus"))))
+                              _signal(lambda u: u.live_beendet, lambda _wert: True)))
 ausloeser_eintragen(Ausloeser("shot_live", "szenen", SHOT,
                               _signal(lambda u: u.szene_geaendert, lambda wert, name: bool(wert) and name == wert)))
 

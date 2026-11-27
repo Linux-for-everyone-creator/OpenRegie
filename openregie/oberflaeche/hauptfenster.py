@@ -1,7 +1,7 @@
 """Das Hauptfenster – Aussehen nach dem Entwurf „Hauptfenster (Build 1)“.
 
   ┌──────────────────────────────────────────────────────────────────────┐
-  │ [■] OpenRegie         ( ● OBS verbunden )        ( ● ON AIR ) 18:57:12 │  Kopfleiste
+  │ [■] OpenRegie   ( ● OBS verbunden )   [▶ Stream starten] ( ● ON AIR ) 18:57 │  Kopfleiste
   ├──────────────────────────────────────────────────────────────────────┤
   │ (Hinweis, wenn mit OBS etwas nicht stimmt)  [OBS starten] [Neu]       │  Meldungsleiste
   ├──────────────┬──────────────────────────────┬────────────────────────┤
@@ -21,13 +21,15 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import QTime, Qt, QTimer
-from PySide6.QtWidgets import (QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+from PySide6.QtGui import QFont, QFontMetrics
+from PySide6.QtWidgets import (QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMainWindow,
                                QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
 from .. import einstellungen
 from ..obs.motor import MotorZustand, ObsMotor
 from ..automatik.motor import Automatik
 from ..obs.quellen import ObsQuellen
+from ..obs.stream import StreamSteuerung
 from ..obs.verbindung import ObsVerbindung, Sendung, Status
 from ..obs.vorschau import Vorschau
 from ..twitch.konto import TwitchKonto
@@ -36,6 +38,7 @@ from .bausteine import Logo, OnAirLicht, VerbindungsAnzeige, VorschauBild, besch
 from .overlay_bereich import Bibliothek, OverlayBedienfeld, UnoEinrichtung
 from .shot_bereich import ShotBedienfeld, ShotLeiste, ShotNeu, ShotNeuFenster
 from .stil import stylesheet
+from .stream_knopf import StreamKnopf, frage_ja_nein
 from .twitch_bereich import TwitchBereich
 from .wenn_dann import WennDannFenster, WennDannKnopf, naechster_text
 
@@ -47,11 +50,12 @@ STREAM_STOPP_WARTEN_MS = 15000
 class Hauptfenster(QMainWindow):
     def __init__(self, E, verbindung: ObsVerbindung, vorschau: Vorschau, motor: ObsMotor,
                  uno: UnoVerwaltung, twitch: TwitchKonto, quellen: ObsQuellen | None = None,
-                 automatik: Automatik | None = None):
+                 automatik: Automatik | None = None, stream: StreamSteuerung | None = None):
         super().__init__()
         # Shots/Quellen und Automatik: Motor-Schicht – das Fenster spricht nie direkt mit OBS
         self.quellen = quellen or ObsQuellen(verbindung, E.texte, E.quellen, self)
         self.automatik = automatik or Automatik(E.texte, verbindung, self.quellen, uno, self)
+        self.stream = stream or StreamSteuerung(verbindung, E.texte, self)  # Stream starten/beenden
         self.E = E
         self.verbindung = verbindung
         self.vorschau = vorschau
@@ -101,10 +105,20 @@ class Hauptfenster(QMainWindow):
         self.knopf_wenn_dann.clicked.connect(self.wenn_dann_oeffnen)
         kl.addWidget(self.knopf_wenn_dann)
         kl.addSpacing(g.abstand)
+        # „▶ Stream starten“ direkt neben ON AIR: Knopf und Licht gehören zusammen
+        self.stream_knopf = StreamKnopf(E, self.stream, self)
+        self.knopf_stream = self.stream_knopf.knopf
+        kl.addWidget(self.knopf_stream)
         self.on_air = OnAirLicht(E)
         kl.addWidget(self.on_air)
         kl.addSpacing(g.abstand)
         self.uhr = beschriftung("", "uhr")
+        uhr_schrift = QFont(str(g.schriftart))
+        uhr_schrift.setPixelSize(int(g.schrift_uhr))
+        uhr_schrift.setBold(True)
+        # feste Breite: schmale Ziffern (11:11:11) sollen die Kopfleiste nicht verschieben
+        self.uhr.setFixedWidth(QFontMetrics(uhr_schrift).horizontalAdvance("00:00:00") + 2)
+        self.uhr.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         kl.addWidget(self.uhr)
         haupt.addWidget(kopf)
 
@@ -132,6 +146,11 @@ class Hauptfenster(QMainWindow):
         self.knopf_neu.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.knopf_neu.clicked.connect(self.motor.neu_verbinden)
         ml.addWidget(self.knopf_neu)
+        # Meldung vom Stream-Knopf (z. B. „Stream-Key fehlt“) wegklicken
+        self.knopf_verstanden = knopf(t.knopf_meldung_verstanden)
+        self.knopf_verstanden.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.knopf_verstanden.clicked.connect(self.stream.meldung_weg)
+        ml.addWidget(self.knopf_verstanden)
 
         # --- Mitte: Bibliothek | Live-Bild + Twitch | Ausgewählt -------------
         reihe = QHBoxLayout()
@@ -219,6 +238,7 @@ class Hauptfenster(QMainWindow):
         verbindung.status_geaendert.connect(self._status)
         verbindung.sendung_geaendert.connect(self._sendung)
         verbindung.szene_geaendert.connect(self._szene)
+        self.stream.meldung_geaendert.connect(lambda _text: self._meldungsleiste_auffrischen())
         vorschau.neues_bild.connect(self._bild)
         motor.zustand_geaendert.connect(lambda *_: self._meldungsleiste_auffrischen())
         motor.sammlung_meldung.connect(self._sammlung)
@@ -249,7 +269,7 @@ class Hauptfenster(QMainWindow):
         if jetzt.minute() != getattr(self, "_minute", None):  # „Nächster Stream“ einmal pro Minute
             self._minute = jetzt.minute()
             if hasattr(self, "automatik"):
-                self.naechster_stream.setText(naechster_text(self.E, self.automatik))
+                self._naechster_zeigen()
 
     # --- Wenn-dann ----------------------------------------------------------
     def wenn_dann_oeffnen(self) -> None:
@@ -259,7 +279,12 @@ class Hauptfenster(QMainWindow):
 
     def _automatik_zeigen(self) -> None:
         self.knopf_wenn_dann.setText(WennDannKnopf.text(self.E, self.automatik))
-        self.naechster_stream.setText(naechster_text(self.E, self.automatik))
+        self._naechster_zeigen()
+
+    def _naechster_zeigen(self) -> None:
+        text = naechster_text(self.E, self.automatik)
+        self.naechster_stream.setText(text)
+        self.naechster_stream.setVisible(bool(text))  # leer: kein Platz in der Kopfleiste verschenken
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -356,8 +381,10 @@ class Hauptfenster(QMainWindow):
 
     def _meldungsleiste_auffrischen(self) -> None:
         v, m, t = self.verbindung, self.motor, self.E.texte
-        text, obs_knopf, neu_knopf = "", False, False
-        if v.verbunden:
+        text, obs_knopf, neu_knopf, verstanden = "", False, False, False
+        if v.verbunden and self.stream.meldung:
+            text, verstanden = self.stream.meldung, True  # z. B. „Stream-Key fehlt“
+        elif v.verbunden:
             text = self._sammlung_text
         elif m.zustand is MotorZustand.STARTET:
             text = t.meldung_obs_startet  # bleibt stehen, bis OBS verbunden ist (kein Flackern)
@@ -370,6 +397,7 @@ class Hauptfenster(QMainWindow):
         self.meldungstext.setText(text)
         self.knopf_obs_starten.setVisible(obs_knopf and not m.obs_laeuft())
         self.knopf_neu.setVisible(neu_knopf)
+        self.knopf_verstanden.setVisible(verstanden)
 
     def _sendung(self, sendung: Sendung) -> None:
         self.on_air.zeigen_sendung(sendung)
@@ -391,18 +419,9 @@ class Hauptfenster(QMainWindow):
     # --- Schließen ----------------------------------------------------------
     def frage_beenden(self) -> bool:
         """Große, einfache Nachfrage, wenn gerade live gestreamt wird."""
-        t, g = self.E.texte, self.E.groessen
-        box = QMessageBox(self)
-        box.setWindowTitle(t.frage_beenden_live_titel)
-        box.setText(t.frage_beenden_live)
-        box.setIcon(QMessageBox.Icon.Warning)
-        ja = box.addButton(t.knopf_beenden_ja, QMessageBox.ButtonRole.DestructiveRole)
-        nein = box.addButton(t.knopf_beenden_nein, QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(nein)
-        box.setStyleSheet(stylesheet(self.E) + f"QMessageBox {{ background-color: {self.E.farben.flaeche}; }}"
-                          f"QLabel {{ font-size: {g.schrift}px; }} QPushButton {{ min-width: 340px; }}")
-        box.exec()
-        return box.clickedButton() is ja
+        t = self.E.texte
+        return frage_ja_nein(self.E, self, t.frage_beenden_live_titel, t.frage_beenden_live,
+                             t.knopf_beenden_ja, t.knopf_beenden_nein)
 
     def closeEvent(self, e):
         if self._schliessen_erlaubt:

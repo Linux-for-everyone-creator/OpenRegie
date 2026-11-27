@@ -17,7 +17,7 @@ from enum import Enum
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
 from . import zugang as zugang_modul
-from .verbindung import ObsVerbindung, Sendung, Status
+from .verbindung import LIVE, ObsVerbindung, Sendung, Status
 
 log = logging.getLogger("openregie.motor")
 
@@ -129,7 +129,7 @@ class ObsMotor(QObject):
     def braucht_nachfrage_beim_beenden(self) -> bool:
         """Läuft gerade ein Stream aus dem OBS, das OpenRegie beenden würde?"""
         return (self.selbst_gestartet and bool(self._obs.beim_beenden_schliessen)
-                and self._verbindung.sendung in (Sendung.AN, Sendung.STARTET))
+                and self._verbindung.sendung in (*LIVE, Sendung.STARTET))
 
     # ------------------------------------------------------------------
     def _verbindungsstatus(self, status: Status, _meldung: str) -> None:

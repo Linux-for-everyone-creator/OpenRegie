@@ -112,6 +112,25 @@ Fehlerbericht: Countdown steht auf 00:00 und lässt sich nicht bedienen.
 - [x] Frische Screenshots im README (Regiepult und Fenster „Shot hinzufügen“, als Pre-Alpha markiert)
 - [ ] Ein Test-Stream mit Countdown durch Kevin
 
+### Build 1.2.3 – Stream direkt aus OpenRegie starten · *fertig (27.11.2026)*
+- [x] Großer Knopf oben neben ON AIR: „▶ Stream starten“ (ohne Nachfrage) / „■ Stream beenden“
+      (mit Nachfrage „Stream wirklich beenden?“, vorgewählt ist „Weiter streamen“)
+- [x] Zwischenzustand „Verbinde …“ / „Stoppe …“: Knopf gesperrt, kein Doppelklick
+- [x] Knopf und ON AIR zeigen immer den echten Zustand von OBS – auch bei Start/Stopp in OBS selbst
+- [x] ON AIR leuchtet nur rot, wenn OBS wirklich live ist; „VERBINDE …“ (orange) beim Verbinden und wenn
+      die Verbindung zu Twitch mitten im Stream wegbricht
+- [x] Vor dem Start prüft OpenRegie, ob in OBS ein Stream-Key eingetragen ist (sonst hängt das echte OBS
+      und zeigt ein Fehlerfenster) – verständliche Meldung mit Knopf „Verstanden“
+- [x] Verständliche Meldungen bei Fehlstart (Server nicht erreichbar), Zeitlimit (30 s) und Ablehnung
+- [x] Neue Zwischenschicht `obs/stream.py` – die Oberfläche spricht weiter nie direkt mit OBS
+- [x] Wenn-dann „Stream startet/endet“ nur bei echten Übergängen (nicht nach einem Wackler, nicht bei
+      einem Fehlstart, nicht nur weil OBS kurz weg war)
+- [x] Kopfleiste: Knopf, ON AIR und Uhr fest breit – nichts rutscht beim Umschalten unter dem Zeiger weg
+- [x] Geprüft: Unit-Tests 3× je 315/315, echtes OBS 33.0.3 (`werkzeuge/test_stream_mit_echtem_obs.py`)
+      3× je 73/73 ohne OBS-Fehlerfenster, echtes Uno 28/28
+- [ ] Frischer Screenshot fürs README
+- [ ] Ein echter Test-Stream zu Twitch mit dem neuen Knopf durch Kevin
+
 ### Build 1.3
 - [ ] Lautstärke-Auslöser: Spricht Kevin (Pegel über Schwelle), schaltet OpenRegie auf die Kamera um;
       Schwellwert einstellbar. Pegelmessung nur, solange so eine Regel aktiv ist.
@@ -132,7 +151,8 @@ Fehlerbericht: Countdown steht auf 00:00 und lässt sich nicht bedienen.
 - [ ] Stream Dock
 
 ## Technik in Kürze
-- `openregie/obs/` – die Motor-Schicht: Verbindung, Vorschau, OBS unsichtbar starten/beenden,
+- `openregie/obs/` – die Motor-Schicht: Verbindung, Vorschau, OBS unsichtbar starten/beenden, Stream
+  starten/beenden (`stream.py`),
   Shots und Quellen (`quellen.py`), Zwecke und Layouts (`vorlagen.py`)
 - `openregie/automatik/` – Wenn-dann-Regeln, Register der Auslöser/Aktionen, Zeitplan
 - `openregie/uno/` – Overlays.uno: Befehle an die API-Adresse eines Uno-Projekts

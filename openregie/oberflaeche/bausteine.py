@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import QEvent, QObject, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QToolTip, QWidget
 
 from ..obs.verbindung import Sendung, Status
@@ -195,12 +195,22 @@ class VerbindungsAnzeige(Pille):
 
 
 class OnAirLicht(Pille):
-    """Das rote „● ON AIR“-Schild."""
+    """Das rote „● ON AIR“-Schild. Rot leuchtet es nur, wenn OBS wirklich live ist;
+    beim Verbinden, Neu-Verbinden und Stoppen ist es orange."""
 
     def __init__(self, E, parent=None):
         super().__init__(E, parent)
-        self.setFixedHeight(E.groessen.on_air_hoehe)
-        self.setMinimumWidth(E.groessen.on_air_breite)
+        g, t = E.groessen, E.texte
+        self.setFixedHeight(g.on_air_hoehe)
+        # Feste Breite für den längsten Text: sonst verrutscht die Kopfleiste beim Umschalten
+        schrift = QFont(str(g.schriftart))
+        schrift.setPixelSize(int(g.schrift_titel) - 4)
+        schrift.setWeight(QFont.Weight.Black)
+        schrift.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 3)
+        texte = (t.on_air_an, t.on_air_aus, t.on_air_startet, t.on_air_stoppt, t.on_air_wieder)
+        laengster = max(QFontMetrics(schrift).horizontalAdvance(x) for x in texte)
+        # Ränder (22 + 26), Punkt (16), Abstand (12), Rahmen (2 × 2) und etwas Luft
+        self.setFixedWidth(max(int(g.on_air_breite), laengster + 22 + 26 + 16 + 12 + 4 + 2))
         self.zeigen_sendung(Sendung.AUS)
 
     def zeigen_sendung(self, sendung: Sendung) -> None:
@@ -208,6 +218,7 @@ class OnAirLicht(Pille):
         hinter, vorder, text = {
             Sendung.AN: (f.on_air_an, f.on_air_an_text, t.on_air_an),
             Sendung.STARTET: (f.on_air_startet, f.on_air_an_text, t.on_air_startet),
+            Sendung.WIEDER: (f.on_air_startet, f.on_air_an_text, t.on_air_wieder),
             Sendung.STOPPT: (f.on_air_startet, f.on_air_an_text, t.on_air_stoppt),
             Sendung.AUS: (f.on_air_aus, f.on_air_aus_text, t.on_air_aus),
         }[sendung]

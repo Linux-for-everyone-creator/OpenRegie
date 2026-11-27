@@ -103,6 +103,8 @@ class Automatik(QObject):
 
         # Was Auslöser benutzen dürfen (Signale, die OBS ohnehin schickt)
         self.sendung_geaendert = verbindung.sendung_geaendert
+        self.live_begonnen = verbindung.live_begonnen
+        self.live_beendet = verbindung.live_beendet
         self.szene_geaendert = verbindung.szene_geaendert
         # Shot in OBS umbenannt → Regeln, die diesen Shot meinen, ziehen den neuen Namen mit
         umbenannt = getattr(quellen, "shot_umbenannt", None)
